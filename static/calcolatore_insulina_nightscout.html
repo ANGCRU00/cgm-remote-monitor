@@ -1,0 +1,181 @@
+
+<style>
+.wrap { padding: 1rem 0; max-width: 640px; }
+.card { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; margin-bottom: 12px; }
+.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.metric { background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 1rem; text-align: center; }
+.metric-label { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 6px; }
+.metric-value { font-size: 24px; font-weight: 500; color: var(--color-text-primary); }
+.metric-unit { font-size: 12px; color: var(--color-text-tertiary); margin-top: 2px; }
+.glicemia-big { font-size: 48px; font-weight: 500; }
+.trend { font-size: 24px; margin-left: 8px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field label { font-size: 14px; color: var(--color-text-secondary); }
+.field input { font-size: 16px; padding: 10px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-primary); color: var(--color-text-primary); width: 100%; box-sizing: border-box; }
+.total-card { border: 2px solid var(--color-border-info); border-radius: var(--border-radius-lg); padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.total-value { font-size: 36px; font-weight: 500; color: var(--color-text-info); }
+.alert { border-radius: var(--border-radius-md); padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+.alert-ok { background: var(--color-background-success); color: var(--color-text-success); border: 0.5px solid var(--color-border-success); }
+.alert-warn { background: var(--color-background-warning); color: var(--color-text-warning); border: 0.5px solid var(--color-border-warning); }
+.alert-danger { background: var(--color-background-danger); color: var(--color-text-danger); border: 0.5px solid var(--color-border-danger); }
+.note { font-size: 12px; color: var(--color-text-tertiary); margin-top: 1rem; line-height: 1.6; }
+.refresh-btn { font-size: 13px; padding: 6px 14px; cursor: pointer; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-secondary); }
+.status { font-size: 12px; color: var(--color-text-tertiary); margin-top: 6px; }
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">Calcolatore insulina con dati in tempo reale da Nightscout</h2>
+
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <span style="font-size:13px; color:var(--color-text-secondary);">Glicemia attuale</span>
+      <button class="refresh-btn" onclick="fetchNS()"><i class="ti ti-refresh" aria-hidden="true"></i> Aggiorna</button>
+    </div>
+    <div style="display:flex; align-items:baseline; gap:4px;">
+      <span class="glicemia-big" id="glicemia-display">—</span>
+      <span style="font-size:18px; color:var(--color-text-secondary);">mg/dl</span>
+      <span class="trend" id="trend-display"></span>
+    </div>
+    <div class="status" id="status-text">Caricamento in corso...</div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <div class="metric-label">Ultima lettura</div>
+      <div class="metric-value" id="time-display" style="font-size:16px;">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Delta</div>
+      <div class="metric-value" id="delta-display">—</div>
+      <div class="metric-unit">mg/dl</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Target</div>
+      <div class="metric-value" style="font-size:16px;">180–200</div>
+      <div class="metric-unit">mg/dl</div>
+    </div>
+  </div>
+
+  <div id="alert-box"></div>
+
+  <div class="card">
+    <div class="field">
+      <label><i class="ti ti-bread" aria-hidden="true" style="font-size:16px; vertical-align:-2px; margin-right:4px"></i>Carboidrati da assumere (g)</label>
+      <input type="number" id="carbs" placeholder="es. 60" min="0" max="500" oninput="calcola()" />
+    </div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <div class="metric-label">Dose pasto</div>
+      <div class="metric-value" id="dose-pasto">—</div>
+      <div class="metric-unit">unità</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Correzione</div>
+      <div class="metric-value" id="dose-correzione">—</div>
+      <div class="metric-unit">unità</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">In target?</div>
+      <div class="metric-value" id="in-target" style="font-size:16px;">—</div>
+    </div>
+  </div>
+
+  <div class="total-card" id="total-card" style="display:none;">
+    <div>
+      <div style="font-size:15px; color:var(--color-text-secondary);">Dose totale consigliata</div>
+      <div style="font-size:12px; color:var(--color-text-tertiary); margin-top:2px;">pasto + correzione</div>
+    </div>
+    <div>
+      <span class="total-value" id="dose-totale">—</span>
+      <span style="font-size:14px; color:var(--color-text-secondary); margin-left:4px;">u</span>
+    </div>
+  </div>
+
+  <p class="note">⚠️ Questo calcolatore è solo uno strumento di supporto. Consulta sempre il tuo diabetologo prima di modificare le dosi di insulina.</p>
+</div>
+
+<script>
+const NS_URL = 'https://cgm-remote-monitor-1-slow.onrender.com';
+const API_SECRET = '14aefba6c5cc6a27b24260e8d2ed9e8f';
+const TARGET_MIN = 180;
+const TARGET_MAX = 200;
+const TARGET_MID = 190;
+const IC_RATIO = 10;
+const CF = 40;
+
+let currentGlicemia = null;
+
+const TREND_ARROWS = {
+  'DoubleUp': '⇈', 'SingleUp': '↑', 'FortyFiveUp': '↗',
+  'Flat': '→', 'FortyFiveDown': '↘', 'SingleDown': '↓',
+  'DoubleDown': '⇊', 'NONE': '—', 'NOT COMPUTABLE': '?'
+};
+
+async function fetchNS() {
+  document.getElementById('status-text').textContent = 'Aggiornamento...';
+  try {
+    const res = await fetch(`${NS_URL}/api/v1/entries/sgv.json?count=2`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data || data.length === 0) throw new Error('Nessun dato');
+
+    const latest = data[0];
+    const prev = data[1];
+    currentGlicemia = latest.sgv;
+
+    document.getElementById('glicemia-display').textContent = latest.sgv;
+
+    const arrow = TREND_ARROWS[latest.direction] || '→';
+    document.getElementById('trend-display').textContent = arrow;
+
+    const date = new Date(latest.date);
+    const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('time-display').textContent = timeStr;
+
+    const delta = prev ? latest.sgv - prev.sgv : 0;
+    document.getElementById('delta-display').textContent = (delta >= 0 ? '+' : '') + delta;
+
+    const g = latest.sgv;
+    let alertHtml = '';
+    if (g < 70) {
+      alertHtml = '<div class="alert alert-danger"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Ipoglicemia grave — non fare insulina, assumi zuccheri subito.</div>';
+    } else if (g < 100) {
+      alertHtml = '<div class="alert alert-warn"><i class="ti ti-alert-circle" aria-hidden="true"></i> Glicemia bassa — valuta con il medico prima di correggere.</div>';
+    } else if (g > 350) {
+      alertHtml = '<div class="alert alert-danger"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Glicemia molto alta — contatta il medico.</div>';
+    } else if (g >= TARGET_MIN && g <= TARGET_MAX) {
+      alertHtml = '<div class="alert alert-ok"><i class="ti ti-circle-check" aria-hidden="true"></i> Glicemia nel tuo target. Nessuna correzione necessaria.</div>';
+    }
+    document.getElementById('alert-box').innerHTML = alertHtml;
+
+    document.getElementById('status-text').textContent = `Aggiornato alle ${timeStr}`;
+    calcola();
+  } catch (e) {
+    document.getElementById('status-text').textContent = `Errore: ${e.message}`;
+    document.getElementById('glicemia-display').textContent = '—';
+  }
+}
+
+function calcola() {
+  if (currentGlicemia === null) return;
+  const carbs = parseFloat(document.getElementById('carbs').value);
+  const g = currentGlicemia;
+
+  const dosePasto = isNaN(carbs) ? 0 : carbs / IC_RATIO;
+  const correzione = (g - TARGET_MID) / CF;
+  const totale = dosePasto + correzione;
+  const totaleArrotondato = Math.round(totale * 2) / 2;
+
+  document.getElementById('dose-pasto').textContent = isNaN(carbs) ? '—' : dosePasto.toFixed(1);
+  document.getElementById('dose-correzione').textContent = (correzione >= 0 ? '+' : '') + correzione.toFixed(1);
+  document.getElementById('in-target').textContent = (g >= TARGET_MIN && g <= TARGET_MAX) ? 'Sì ✓' : (g < TARGET_MIN ? 'Bassa' : 'Alta');
+
+  document.getElementById('total-card').style.display = 'flex';
+  document.getElementById('dose-totale').textContent = totaleArrotondato <= 0 ? '0' : totaleArrotondato.toFixed(1);
+}
+
+fetchNS();
+setInterval(fetchNS, 5 * 60 * 1000);
+</script>
