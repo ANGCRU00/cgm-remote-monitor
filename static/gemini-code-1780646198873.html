@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calcolatore Insulina Real-Time</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 480px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .header-grid {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .label { font-size: 14px; color: #86868b; font-weight: 500; }
+        .btn-refresh {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        .gluco-value {
+            font-size: 64px;
+            font-weight: 700;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .unit { font-size: 20px; color: #86868b; font-weight: 400; }
+        .time-update { font-size: 12px; color: #86868b; margin-bottom: 25px; }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            text-align: center;
+            background: #f5f5f7;
+            padding: 15px;
+            border-radius: 14px;
+            margin-bottom: 30px;
+        }
+        .info-val { font-size: 18px; font-weight: 600; margin-top: 5px; }
+
+        .input-section { margin-bottom: 30px; }
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #d2d2d7;
+            border-radius: 12px;
+            font-size: 18px;
+            box-sizing: border-box;
+            margin-top: 8px;
+            outline: none;
+        }
+        input[type="number"]:focus { border-color: #0071e3; }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+            border-top: 1px solid #e5e5ea;
+            padding-top: 20px;
+        }
+        .res-val { font-size: 20px; font-weight: 600; margin-top: 5px; color: #1d1d1f; }
+
+        .total-section {
+            background: #e8f4ff;
+            padding: 20px;
+            border-radius: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .total-title { font-size: 18px; font-weight: 600; color: #0071e3; }
+        .total-val { font-size: 42px; font-weight: 700; color: #0071e3; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Calcolatore insulina con dati in tempo reale da Nightscout</h1>
+
+    <div class="header-grid">
+        <div class="label">Glicemia attuale</div>
+        <button class="btn-refresh" onclick="fetchGlucose()">Aggiorna</button>
+    </div>
+
+    <div class="gluco-value" id="glucose-display">-- <span class="unit">mg/dl</span> <span id="arrow-display"></span></div>
+    <div class="time-update" id="time-display">Caricamento in corso...</div>
+
+    <div class="info-grid">
+        <div>
+            <div class="label">Ultima lettura</div>
+            <div class="info-val" id="last-time-val">--:--</div>
+        </div>
+        <div>
+            <div class="label">Delta</div>
+            <div class="info-val" id="delta-val">--</div>
+        </div>
+        <div>
+            <div class="label">Target</div>
+            <div class="info-val">140 mg/dl</div>
+        </div>
+    </div>
+
+    <div class="input-section">
+        <label class="label" for="carbs-input">Carboidrati da assumere (g)</label>
+        <input type="number" id="carbs-input" placeholder="es. 60" oninput="calculateInsulin()">
+    </div>
+
+    <div class="results-grid">
+        <div>
+            <div class="label">Dose pasto</div>
+            <div class="res-val" id="dose-pasto">0.0 <span style="font-size:12px;color:#86868b">u</span></div>
+        </div>
+        <div>
+            <div class="label">Correzione</div>
+            <div class="res-val" id="dose-correzione">0.0 <span style="font-size:12px;color:#86868b">u</span></div>
+        </div>
+        <div>
+            <div class="label">In target?</div>
+            <div class="res-val" id="target-status">--</div>
+        </div>
+    </div>
+
+    <div class="total-section">
+        <div>
+            <div class="total-title">Dose totale consigliata</div>
+            <div class="label" style="color: #0071e3; opacity: 0.8;">pasto + correzione (arrotondata)</div>
+        </div>
+        <div class="total-val" id="total-val">0 <span style="font-size:20px;font-weight:500">u</span></div>
+    </div>
+</div>
+
+<script>
+    // Configurazione Nightscout con i tuoi dati
+    const NIGHTSCOUT_URL = "https://cgm-remote-monitor-1-slow.onrender.com";
+    const API_SECRET = "14aefba6c5cc6a27b24260e8d2ed9e8f"; 
+    
+    // Parametri Medici
+    const TARGET_BG = 140;
+    const ISF = 40;       // 1 unità abbassa di 40 mg/dl
+    const IC_RATIO = 10;   // 1 unità ogni 10g di carboidrati
+
+    let currentGlucose = 0;
+
+    async function fetchGlucose() {
+        const timeDisplay = document.getElementById('time-display');
+        timeDisplay.innerText = "Aggiornamento...";
+        
+        try {
+            let url = `${NIGHTSCOUT_URL}/api/v1/entries/sgv.json?limit=1`;
+            let headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            };
+            
+            if(API_SECRET) {
+                headers["API-SECRET"] = API_SECRET;
+            }
+
+            const response = await fetch(url, { headers: headers });
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                const entry = data[0];
+                currentGlucose = entry.sgv;
+                
+                // Calcolo Delta
+                let deltaText = "--";
+                if(entry.delta !== undefined) {
+                    const d = Math.round(entry.delta);
+                    deltaText = d >= 0 ? `+${d} mg/dl` : `${d} mg/dl`;
+                }
+
+                // Frecce Trend
+                const arrows = {
+                    DoubleUp: "↑↑", SingleUp: "↑", FortyFiveUp: "↗",
+                    Flat: "→", FortyFiveDown: "↘", SingleDown: "↓", DoubleDown: "↓↓"
+                };
+                let arrow = arrows[entry.direction] || "";
+
+                // Orario della lettura locale del dispositivo
+                const date = new Date(entry.date);
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const timeString = `${hours}:${minutes}`;
+
+                // Aggiornamento grafico dell'interfaccia
+                document.getElementById('glucose-display').innerHTML = `${currentGlucose} <span class="unit">mg/dl</span>`;
+                document.getElementById('arrow-display').innerText = arrow;
+                document.getElementById('last-time-val').innerText = timeString;
+                document.getElementById('delta-val').innerText = deltaText;
+                timeDisplay.innerText = `Aggiornato alle ${timeString}`;
+
+                calculateInsulin();
+            } else {
+                timeDisplay.innerText = "Errore: nessun dato trovato.";
+            }
+        } catch (error) {
+            console.error(error);
+            timeDisplay.innerText = "Errore di connessione a Nightscout.";
+        }
+    }
+
+    function calculateInsulin() {
+        const carbsInput = document.getElementById('carbs-input').value;
+        const carbs = parseFloat(carbsInput) || 0;
+
+        // 1. Calcolo Dose Pasto (g / 10)
+        const dosePasto = carbs / IC_RATIO;
+        document.getElementById('dose-pasto').innerHTML = `${dosePasto.toFixed(1)} <span style="font-size:12px;color:#86868b">u</span>`;
+
+        // 2. Calcolo Correzione (Se glicemia > 140)
+        let doseCorrezione = 0;
+        let statusText = "Sì";
+        
+        if (currentGlucose > TARGET_BG) {
+            doseCorrezione = (currentGlucose - TARGET_BG) / ISF;
+            statusText = "Alta";
+        } else if (currentGlucose < 70 && currentGlucose > 0) {
+            statusText = "Bassa";
+        } else if (currentGlucose === 0) {
+            statusText = "--";
+        }
+
+        document.getElementById('dose-correzione').innerHTML = `${doseCorrezione >= 0 ? '+' : ''}${doseCorrezione.toFixed(1)} <span style="font-size:12px;color:#86868b">u</span>`;
+        document.getElementById('target-status').innerText = statusText;
+
+        // 3. Calcolo Totale con Arrotondamento Matematico Perfetto
+        const totaleEsatto = dosePasto + doseCorrezione;
+        const totaleArrotondato = Math.round(totaleEsatto);
+
+        document.getElementById('total-val').innerHTML = `${totaleArrotondato} <span style="font-size:20px;font-weight:500">u</span>`;
+    }
+
+    // Carica i dati all'avvio
+    window.onload = fetchGlucose;
+</script>
+
+</body>
+</html>
