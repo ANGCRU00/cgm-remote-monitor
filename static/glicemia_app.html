@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#f3f6f2" />
+<title>Glicemia · Calcolatore + Manager</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f1f5f0; --bg-2:#e7eee4; --surface:#ffffff;
+    --ink:#16201b; --ink-soft:#59665f; --ink-faint:#8b968f;
+    --line:#e2e8df; --line-2:#d3dccd;
+    --brand:#157f6b; --brand-ink:#0d5a4c; --brand-bg:#e3f3ee;
+    --ok-ink:#1d7a4c; --ok-bg:#e4f4e9; --ok-line:#b6e0c4;
+    --warn-ink:#9a6300; --warn-bg:#fbf0d8; --warn-line:#f0d59a;
+    --danger-ink:#b3261e; --danger-bg:#fbe6e4; --danger-line:#f1c4c0;
+    --blue:#2570c2; --blue-bg:#e2eefb; --blue-line:#bcd7f4;
+    --radius:26px; --radius-sm:16px;
+    --shadow:0 1px 2px rgba(22,32,27,.04), 0 12px 30px rgba(22,32,27,.07);
+    --shadow-sm:0 1px 2px rgba(22,32,27,.05), 0 6px 16px rgba(22,32,27,.06);
+    --display:"Bricolage Grotesque", system-ui, sans-serif;
+    --body:"Spline Sans", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; min-height:100vh; font-family:var(--body); color:var(--ink);
+    background:
+      radial-gradient(120% 60% at 100% 0%, var(--bg-2), transparent 55%),
+      radial-gradient(100% 50% at 0% 100%, #eaf2e9, transparent 50%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased; line-height:1.5; overflow-x:hidden;
+  }
+  .wrap { max-width:560px; margin:0 auto; padding:0 16px calc(40px + env(safe-area-inset-bottom)); }
+
+  /* ---------- Topbar ---------- */
+  .topbar { position:sticky; top:0; z-index:20; margin:0 -16px 14px; padding:14px 18px;
+    background:color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter:blur(14px) saturate(120%); -webkit-backdrop-filter:blur(14px) saturate(120%);
+    border-bottom:1px solid var(--line); }
+  .topbar-inner { max-width:560px; margin:0 auto; display:flex; align-items:center; gap:14px; }
+  .brandmark { display:flex; align-items:center; gap:9px; font-family:var(--display);
+    font-weight:700; font-size:15px; letter-spacing:-.2px; color:var(--ink); flex:1; min-width:0; }
+  .brandmark .dot { width:30px; height:30px; flex-shrink:0; border-radius:9px; display:grid; place-items:center;
+    background:linear-gradient(150deg, var(--brand), #1aa085); box-shadow:0 4px 12px rgba(21,127,107,.35); }
+  .brandmark .dot svg { width:17px; height:17px; stroke:#fff; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+  .brandmark .txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bg-chip { display:flex; align-items:center; gap:8px; padding:7px 13px 7px 11px; border-radius:999px;
+    background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow-sm); flex-shrink:0; }
+  .bg-chip .v { font-family:var(--display); font-weight:800; font-size:22px; line-height:1; letter-spacing:-.5px; font-variant-numeric:tabular-nums; }
+  .bg-chip .ar { font-size:17px; color:var(--ink-soft); }
+  .bg-chip .u { font-size:10.5px; color:var(--ink-faint); font-weight:600; }
+  .bg-chip.state-ok { background:var(--ok-bg); border-color:var(--ok-line); }
+  .bg-chip.state-ok .v { color:var(--ok-ink); }
+  .bg-chip.state-warn { background:var(--warn-bg); border-color:var(--warn-line); }
+  .bg-chip.state-warn .v { color:var(--warn-ink); }
+  .bg-chip.state-danger { background:var(--danger-bg); border-color:var(--danger-line); }
+  .bg-chip.state-danger .v { color:var(--danger-ink); }
+
+  /* ---------- Tabs ---------- */
+  .tabs { display:flex; gap:6px; overflow-x:auto; margin:0 -16px 18px; padding:0 16px 4px; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { flex-shrink:0; font-family:var(--body); font-size:13px; font-weight:600; cursor:pointer;
+    padding:9px 14px; border-radius:999px; border:1px solid var(--line-2); background:var(--surface);
+    color:var(--ink-soft); transition:.18s; white-space:nowrap; }
+  .tab.active { background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 12px rgba(21,127,107,.3); }
+
+  .view { display:none; animation:fade .3s ease both; }
+  .view.active { display:block; }
+  @keyframes fade { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+  /* ---------- Stepper ---------- */
+  .steps { display:flex; align-items:center; gap:6px; margin:2px 2px 20px; }
+  .step-pill { flex:1; display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
+  .step-pill .n { width:27px; height:27px; flex-shrink:0; border-radius:50%; display:grid; place-items:center;
+    font-family:var(--display); font-weight:700; font-size:13px; background:var(--surface);
+    color:var(--ink-faint); border:1.5px solid var(--line-2); transition:.2s; }
+  .step-pill .lab { font-size:12px; font-weight:600; color:var(--ink-faint); transition:.2s; white-space:nowrap; }
+  .step-pill .bar { flex:1; height:2px; border-radius:2px; background:var(--line-2); transition:.2s; }
+  .step-pill.active .n { background:var(--brand); color:#fff; border-color:var(--brand); box-shadow:0 4px 12px rgba(21,127,107,.35); }
+  .step-pill.active .lab { color:var(--brand-ink); }
+  .step-pill.done .n { background:var(--brand-bg); color:var(--brand); border-color:var(--ok-line); }
+  .step-pill.done .bar { background:var(--brand); }
+  @media (max-width:420px) { .step-pill .lab { display:none; } }
+
+  .panel { display:none; animation:fade .35s ease both; }
+  .panel.active { display:block; }
+
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px; margin-bottom:14px; box-shadow:var(--shadow); }
+  .card-head { display:flex; align-items:center; gap:10px; font-family:var(--display);
+    font-weight:700; font-size:17px; letter-spacing:-.2px; margin:0 0 4px; }
+  .card-head svg { width:19px; height:19px; stroke:var(--brand); fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .card-sub { font-size:13.5px; color:var(--ink-soft); margin:0 0 18px; }
+  .card h3 { margin:18px 0 8px; font-size:12px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px; }
+
+  /* ---------- Reading ---------- */
+  .reading { text-align:center; padding:8px 0 4px; }
+  .reading .big { font-family:var(--display); font-weight:800; font-size:84px; line-height:.9;
+    letter-spacing:-3px; font-variant-numeric:tabular-nums; display:inline-flex; align-items:baseline; gap:10px; }
+  .reading .big .trend { font-size:44px; color:var(--ink-soft); letter-spacing:0; }
+  .reading .u { font-size:14px; color:var(--ink-faint); font-weight:600; margin-top:6px; letter-spacing:.3px; }
+  .reading-meta { display:flex; justify-content:center; gap:22px; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
+  .reading-meta div { text-align:center; }
+  .reading-meta .lab { font-size:11px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+  .reading-meta .val { font-family:var(--display); font-weight:700; font-size:17px; margin-top:3px; font-variant-numeric:tabular-nums; }
+
+  .refresh-btn { margin-top:18px; width:100%; font-family:var(--body); font-size:14px; font-weight:600;
+    padding:13px 16px; cursor:pointer; border-radius:var(--radius-sm); border:1px solid var(--line-2);
+    background:var(--bg); color:var(--ink-soft); display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    transition:background .18s, transform .1s; }
+  .refresh-btn svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .refresh-btn:hover { background:var(--bg-2); }
+  .refresh-btn:active { transform:scale(.98); }
+  .refresh-btn.spin svg { animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .status { text-align:center; font-size:12.5px; color:var(--ink-faint); margin-top:12px; }
+
+  /* ---------- Alerts ---------- */
+  .alert { border-radius:var(--radius-sm); padding:14px 16px; font-size:13.5px; font-weight:600;
+    margin-bottom:14px; display:flex; align-items:flex-start; gap:11px; line-height:1.4; }
+  .alert svg { width:20px; height:20px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; margin-top:1px; }
+  .alert-ok { background:var(--ok-bg); color:var(--ok-ink); border:1px solid var(--ok-line); }
+  .alert-warn { background:var(--warn-bg); color:var(--warn-ink); border:1px solid var(--warn-line); }
+  .alert-danger { background:var(--danger-bg); color:var(--danger-ink); border:1px solid var(--danger-line); }
+
+  /* ---------- Inputs ---------- */
+  .field-label { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--ink-soft); margin-bottom:9px; }
+  label.lab-sm { display:block; font-size:12px; color:var(--ink-soft); font-weight:600; margin:0 0 6px; }
+  input[type=text], input[type=number], input[type=date], input[type=time], select {
+    font-family:var(--body); font-size:16px; font-weight:500; padding:13px 14px; border-radius:var(--radius-sm);
+    border:1.5px solid var(--line-2); background:var(--surface); color:var(--ink); width:100%;
+    transition:border-color .15s, box-shadow .15s; }
+  input::placeholder { color:var(--ink-faint); font-weight:400; }
+  input:focus, select:focus { outline:none; border-color:var(--brand); box-shadow:0 0 0 4px rgba(21,127,107,.14); }
+
+  .grid { display:grid; gap:10px; }
+  .g2 { grid-template-columns:1fr 1fr; }
+  .g3 { grid-template-columns:1fr 1fr 1fr; }
+  @media (max-width:480px) { .g3 { grid-template-columns:1fr 1fr; } }
+
+  .food-form { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .food-form input#food-name { grid-column:1 / -1; }
+
+  .btn-primary { font-family:var(--body); font-size:15px; font-weight:700; cursor:pointer; padding:14px 16px;
+    border-radius:var(--radius-sm); border:none; background:var(--brand); color:#fff;
+    box-shadow:0 6px 16px rgba(21,127,107,.32); transition:transform .1s, background .18s; width:100%;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+  .btn-primary:hover { background:#12705f; }
+  .btn-primary:active { transform:scale(.985); }
+  .btn-primary.compact { width:auto; padding:12px 18px; font-size:14px; }
+  .food-form .btn-primary { grid-column:1 / -1; }
+
+  .ghost-btn { width:100%; font-family:var(--body); font-size:13px; font-weight:600; cursor:pointer;
+    padding:11px 16px; border-radius:var(--radius-sm); border:1px solid var(--line-2);
+    background:transparent; color:var(--ink-soft); transition:background .18s; }
+  .ghost-btn:hover { background:var(--bg); }
+  .ghost-btn.danger { color:var(--danger-ink); border-color:var(--danger-line); }
+  .ghost-btn.compact { width:auto; padding:10px 14px; }
+  .btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+  .btn-row > .grow { flex:1; }
+
+  /* ---------- Food list ---------- */
+  .food-list { list-style:none; margin:16px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; }
+  .food-list li { display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--line);
+    border-radius:var(--radius-sm); padding:11px 8px 11px 14px; }
+  .food-list .f-name { font-weight:600; font-size:14px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .food-list .f-detail { font-size:11.5px; color:var(--ink-faint); }
+  .food-list .f-carbs { font-family:var(--display); font-weight:700; font-size:14px; color:var(--brand-ink); font-variant-numeric:tabular-nums; }
+  .food-list .f-edit, .food-list .f-del { cursor:pointer; border:none; background:transparent; width:30px; height:30px;
+    border-radius:8px; flex-shrink:0; font-size:17px; line-height:1; transition:background .15s; }
+  .food-list .f-edit { color:var(--brand); }
+  .food-list .f-del { color:var(--danger-ink); font-size:21px; }
+  .food-list .f-edit:hover, .food-list .f-del:hover { background:rgba(0,0,0,.05); }
+  .food-empty { font-size:13px; color:var(--ink-faint); text-align:center; padding:16px 0; }
+
+  .carb-total { margin-top:16px; padding:16px 18px; border-radius:var(--radius-sm); background:var(--brand-bg);
+    border:1px solid var(--ok-line); display:flex; align-items:center; justify-content:space-between; }
+  .carb-total .lab { font-size:13px; font-weight:600; color:var(--brand-ink); }
+  .carb-total .val { font-family:var(--display); font-weight:800; font-size:26px; color:var(--brand-ink); font-variant-numeric:tabular-nums; }
+  .carb-total .val span { font-size:14px; font-weight:600; }
+
+  details.manual { margin-top:14px; }
+  details.manual > summary { cursor:pointer; list-style:none; font-size:13px; font-weight:600; color:var(--brand); padding:6px 0; }
+  details.manual > summary::-webkit-details-marker { display:none; }
+  details.manual > summary::before { content:"＋ "; }
+  details.manual[open] > summary::before { content:"－ "; }
+
+  /* ---------- Dose result ---------- */
+  .dose-hero { text-align:center; background:linear-gradient(160deg, var(--brand) 0%, #0f9a7e 100%);
+    border-radius:var(--radius); padding:30px 22px; color:#fff; box-shadow:0 18px 40px rgba(15,90,76,.4);
+    position:relative; overflow:hidden; }
+  .dose-hero .lab { font-size:13px; font-weight:600; opacity:.9; }
+  .dose-hero .big { font-family:var(--display); font-weight:800; font-size:92px; line-height:.95;
+    letter-spacing:-3px; margin:6px 0 0; font-variant-numeric:tabular-nums; }
+  .dose-hero .big span { font-size:26px; font-weight:700; opacity:.9; }
+  .dose-hero .sub { font-size:13px; opacity:.85; margin-top:6px; }
+  .breakdown { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px; }
+  .breakdown .b { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
+    padding:16px 14px; text-align:center; box-shadow:var(--shadow-sm); }
+  .breakdown .lab { font-size:11.5px; color:var(--ink-faint); font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+  .breakdown .val { font-family:var(--display); font-weight:800; font-size:30px; margin-top:5px; font-variant-numeric:tabular-nums; }
+  .breakdown .val small { font-size:13px; font-weight:600; color:var(--ink-faint); }
+  .breakdown .b.pasto .val { color:var(--brand-ink); }
+  .recap { margin-top:14px; }
+  .recap-row { display:flex; justify-content:space-between; align-items:center; font-size:13.5px;
+    padding:9px 0; border-bottom:1px dashed var(--line); }
+  .recap-row:last-child { border-bottom:none; }
+  .recap-row .k { color:var(--ink-soft); }
+  .recap-row .v { font-weight:600; font-variant-numeric:tabular-nums; }
+
+  .nav { display:flex; gap:10px; margin-top:6px; }
+  .nav .btn-primary { flex:2; }
+  .nav .btn-back { flex:1; font-family:var(--body); font-size:15px; font-weight:600; cursor:pointer;
+    padding:14px 16px; border-radius:var(--radius-sm); border:1px solid var(--line-2);
+    background:var(--surface); color:var(--ink-soft); transition:background .18s; }
+  .nav .btn-back:hover { background:var(--bg); }
+
+  /* ---------- Tables ---------- */
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:6px; }
+  th,td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--ink-faint); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; }
+  tr:last-child td { border-bottom:none; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:20px; font-size:11px; font-weight:700; color:#fff; }
+  .tag { font-size:11px; padding:2px 8px; border-radius:6px; background:var(--bg-2); color:var(--ink-soft); }
+  .actions a { cursor:pointer; margin-right:10px; font-size:12.5px; color:var(--brand); font-weight:600; }
+  .actions a.del { color:var(--danger-ink); }
+  .empty { text-align:center; color:var(--ink-faint); padding:24px; font-size:13px; }
+
+  /* ---------- Stats ---------- */
+  .seg { display:inline-flex; background:var(--bg); border:1px solid var(--line-2); border-radius:12px; padding:3px; }
+  .seg button { background:transparent; color:var(--ink-soft); border:none; padding:7px 13px; border-radius:9px;
+    cursor:pointer; font-size:13px; font-weight:600; font-family:var(--body); }
+  .seg button.active { background:var(--brand); color:#fff; }
+  .stat { background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); padding:14px; }
+  .stat .v { font-family:var(--display); font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .stat .l { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .bartir { height:22px; border-radius:8px; display:flex; overflow:hidden; border:1px solid var(--line); margin-top:6px; }
+  .bartir span { display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; font-weight:700; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; margin-top:12px; }
+  .legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:middle; }
+  .chartbox { position:relative; height:260px; margin-top:12px; }
+  .flex-between { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+
+  /* ---------- Scompenso ---------- */
+  .scomp-card { padding:20px; border-radius:var(--radius-sm); text-align:center; border:2px solid; margin-top:16px; }
+  .scomp-card .lvl { font-family:var(--display); font-size:22px; font-weight:800; letter-spacing:.3px; }
+  .scomp-card .det { font-size:13px; margin-top:6px; }
+
+  /* ---------- Sync / note ---------- */
+  .sync-status { font-size:12.5px; color:var(--ink-faint); margin-top:10px; }
+  .sync-status.ok { color:var(--ok-ink); }
+  .sync-status.err { color:var(--danger-ink); }
+  .note { font-size:12px; color:var(--ink-faint); margin-top:22px; line-height:1.55; text-align:center;
+    padding:0 12px; display:flex; gap:8px; align-items:flex-start; justify-content:center; }
+  .note svg { width:15px; height:15px; flex-shrink:0; stroke:currentColor; fill:none; stroke-width:2; margin-top:1px; }
+  .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(8px);
+    background:var(--ink); color:#fff; padding:12px 18px; border-radius:12px; box-shadow:var(--shadow);
+    opacity:0; pointer-events:none; transition:.3s; z-index:100; font-size:13.5px; font-weight:600; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) { .view, .panel, .refresh-btn.spin svg { animation:none !important; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brandmark">
+      <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 2.5C12 2.5 5 10 5 14.5a7 7 0 0 0 14 0C19 10 12 2.5 12 2.5Z"/></svg></span>
+      <span class="txt">Glicemia · tutto-in-uno</span>
+    </div>
+    <div class="bg-chip" id="bg-chip" title="Glicemia attuale">
+      <span class="v" id="chip-glic">—</span>
+      <span class="ar" id="chip-trend"></span>
+      <span class="u">mg/dl</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <h1 class="sr-only">Calcolatore insulina e gestione glicemia</h1>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-v="dose">Calcola dose</button>
+    <button class="tab" data-v="diario">Diario</button>
+    <button class="tab" data-v="stats">Statistiche</button>
+    <button class="tab" data-v="scompenso">Scompenso</button>
+    <button class="tab" data-v="alimenti">Alimenti</button>
+    <button class="tab" data-v="impostazioni">Impostazioni</button>
+  </div>
+
+  <!-- ========================= DOSE ========================= -->
+  <section class="view active" id="view-dose">
+    <div class="steps">
+      <div class="step-pill active" data-step="1" onclick="goStep(1)"><span class="n">1</span><span class="lab">Glicemia</span><span class="bar"></span></div>
+      <div class="step-pill" data-step="2" onclick="goStep(2)"><span class="n">2</span><span class="lab">Cosa mangi</span><span class="bar"></span></div>
+      <div class="step-pill" data-step="3" onclick="goStep(3)"><span class="n">3</span><span class="lab">Dose</span></div>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="panel active" data-panel="1">
+      <div class="card">
+        <div class="card-head"><svg viewBox="0 0 24 24"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg> Glicemia attuale</div>
+        <p class="card-sub">Letta automaticamente dal sensore (Nightscout) e salvata nel diario.</p>
+        <div class="reading">
+          <div class="big"><span id="glicemia-display">—</span><span class="trend" id="trend-display"></span></div>
+          <div class="u">mg/dl</div>
+          <div class="reading-meta">
+            <div><div class="lab">Ultima lettura</div><div class="val" id="time-display">—</div></div>
+            <div><div class="lab">Variazione</div><div class="val" id="delta-display">—</div></div>
+            <div><div class="lab">Target</div><div class="val" id="target-display">120–140</div></div>
+          </div>
+        </div>
+        <button class="refresh-btn" id="refresh-btn" onclick="fetchNS()">
+          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg> Aggiorna
+        </button>
+        <div class="status" id="status-text">Caricamento in corso…</div>
+      </div>
+      <div id="alert-box"></div>
+      <div class="nav">
+        <button class="btn-primary" onclick="goStep(2)">Continua
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="panel" data-panel="2">
+      <div class="card">
+        <div class="card-head"><svg viewBox="0 0 24 24"><path d="M4 12c0-3 2-5 5-5h6c3 0 5 2 5 5s-2 5-5 5H9c-3 0-5-2-5-5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg> Cosa stai mangiando?</div>
+        <p class="card-sub">Scegli dagli alimenti salvati o aggiungine di nuovi: i carboidrati si sommano da soli.</p>
+        <div class="food-form">
+          <input type="text" id="food-name" placeholder="Nome (es. Pane)" autocomplete="off" />
+          <input type="number" id="food-carbs100" placeholder="Carbo / 100 g" min="0" max="100" inputmode="decimal" />
+          <input type="number" id="food-grams" placeholder="Grammi" min="0" max="2000" inputmode="decimal" />
+          <button type="button" class="btn-primary" onclick="aggiungiAlimento()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Aggiungi alimento
+          </button>
+        </div>
+        <datalist id="food-presets"></datalist>
+        <ul class="food-list" id="food-list"></ul>
+        <div class="carb-total"><span class="lab">Carboidrati totali</span><span class="val" id="carb-total-val">0<span> g</span></span></div>
+        <button type="button" class="ghost-btn danger" id="clear-btn" onclick="svuotaLista()" style="margin-top:12px">Svuota lista</button>
+        <details class="manual">
+          <summary>Inserisci i carboidrati a mano</summary>
+          <div style="margin-top:12px;">
+            <div class="field-label">Carboidrati totali (g)</div>
+            <input type="number" id="carbs" placeholder="es. 60" min="0" max="500" inputmode="numeric" oninput="onCarbsManual()" />
+          </div>
+        </details>
+      </div>
+      <div class="nav">
+        <button class="btn-back" onclick="goStep(1)">Indietro</button>
+        <button class="btn-primary" onclick="goStep(3)">Calcola dose
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="panel" data-panel="3">
+      <div id="alert-box-3"></div>
+      <div class="dose-hero">
+        <div class="lab">Dose totale consigliata</div>
+        <div class="big"><span id="dose-totale">—</span><span>u</span></div>
+        <div class="sub">pasto + correzione glicemia</div>
+      </div>
+      <div class="breakdown">
+        <div class="b pasto"><div class="lab">Dose pasto</div><div class="val" id="dose-pasto">—<small> u</small></div></div>
+        <div class="b"><div class="lab">Correzione</div><div class="val" id="dose-correzione">—<small> u</small></div></div>
+      </div>
+      <div class="card recap" style="margin-top:14px;">
+        <div class="recap-row"><span class="k">Glicemia attuale</span><span class="v" id="recap-glic">—</span></div>
+        <div class="recap-row"><span class="k">Carboidrati pasto</span><span class="v" id="recap-carbs">—</span></div>
+        <div class="recap-row"><span class="k">In target</span><span class="v" id="in-target">—</span></div>
+        <div class="recap-row"><span class="k">Parametri</span><span class="v" id="recap-params">—</span></div>
+      </div>
+      <div class="nav">
+        <button class="btn-back" onclick="goStep(2)">Indietro</button>
+        <button class="btn-primary" onclick="fetchNS()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg> Aggiorna e ricalcola
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================= DIARIO ========================= -->
+  <section class="view" id="view-diario">
+    <div class="card">
+      <div class="card-head"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 4v16"/></svg> Diario glicemico</div>
+      <p class="card-sub">Registra le misurazioni. Le letture Nightscout vengono salvate qui in automatico.</p>
+      <div class="grid g2">
+        <div><label class="lab-sm">Data</label><input type="date" id="d-data"></div>
+        <div><label class="lab-sm">Ora</label><input type="time" id="d-ora"></div>
+        <div><label class="lab-sm">Glicemia (mg/dl)</label><input type="number" id="d-val" min="20" max="600" placeholder="es. 145"></div>
+        <div><label class="lab-sm">Momento</label>
+          <select id="d-momento">
+            <option value="auto">Auto (da ora)</option>
+            <option>Notte</option><option>Mattina</option><option>Pranzo</option><option>Pomeriggio</option><option>Cena</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:10px"><label class="lab-sm">Note</label><input id="d-note" placeholder="es. dopo pasto, attività fisica..."></div>
+      <div class="btn-row">
+        <button class="btn-primary compact" id="d-add">Aggiungi al diario</button>
+        <button class="ghost-btn compact" id="d-cancel" style="display:none">Annulla modifica</button>
+        <span class="sync-status" id="d-live" style="margin-left:auto"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-between">
+        <div class="card-head" style="margin:0">Storico</div>
+        <div class="btn-row" style="margin:0;align-items:flex-end">
+          <div><label class="lab-sm">Da</label><input type="date" id="f-da"></div>
+          <div><label class="lab-sm">A</label><input type="date" id="f-a"></div>
+          <button class="ghost-btn compact" id="f-reset">Reset</button>
+          <button class="ghost-btn compact" id="export">Esporta JSON</button>
+        </div>
+      </div>
+      <div class="chartbox"><canvas id="chart-trend"></canvas></div>
+      <table>
+        <thead><tr><th>Data</th><th>Ora</th><th>Momento</th><th>Valore</th><th>Stato</th><th>Note</th><th></th></tr></thead>
+        <tbody id="diario-body"></tbody>
+      </table>
+      <div class="empty" id="diario-empty">Nessuna misurazione registrata.</div>
+    </div>
+  </section>
+
+  <!-- ========================= STATISTICHE ========================= -->
+  <section class="view" id="view-stats">
+    <div class="card">
+      <div class="flex-between">
+        <div class="card-head" style="margin:0">Tempo nel target</div>
+        <div class="seg" id="stats-range" data-range="14">
+          <button data-r="7">7g</button><button data-r="14" class="active">14g</button><button data-r="30">30g</button>
+        </div>
+      </div>
+      <div id="tempo-stats" class="grid g2" style="margin-top:14px"></div>
+      <h3>Distribuzione (Time in Range)</h3>
+      <div class="bartir" id="tir-bar"></div>
+      <div class="legend" id="tir-legend"></div>
+      <div class="chartbox"><canvas id="chart-tir"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head" style="margin:0 0 14px">Medie glucosio</div>
+      <div class="grid g3">
+        <div class="stat"><div class="v" id="m-avg">–</div><div class="l">Media mg/dl</div></div>
+        <div class="stat"><div class="v" id="m-gmi">–</div><div class="l">GMI (HbA1c %)</div></div>
+        <div class="stat"><div class="v" id="m-cnt">–</div><div class="l">Misurazioni</div></div>
+      </div>
+      <h3>Media per momento del giorno</h3>
+      <div class="chartbox"><canvas id="chart-momenti"></canvas></div>
+      <h3>Andamento media giornaliera</h3>
+      <div class="chartbox"><canvas id="chart-daily"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ========================= SCOMPENSO ========================= -->
+  <section class="view" id="view-scompenso">
+    <div class="card">
+      <div class="card-head"><svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg> Scompenso insulinico</div>
+      <p class="card-sub">Si compila in automatico con la glicemia letta da Nightscout. Target perfetto <span id="sc-target-lbl">140</span> mg/dl.</p>
+      <div class="grid g2">
+        <div><label class="lab-sm">Glicemia attuale (mg/dl)</label><input type="number" id="sc-val" placeholder="es. 210"></div>
+        <div><label class="lab-sm">Target perfetto</label><input type="number" id="sc-target" value="140"></div>
+      </div>
+      <button class="btn-primary compact" id="sc-calc" style="margin-top:14px">Calcola scompenso</button>
+      <div id="sc-result"></div>
+      <h3>Regole di classificazione</h3>
+      <table>
+        <thead><tr><th>Glicemia</th><th>Scompenso</th><th>Indicatore</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 70</td><td>Rischio ipoglicemia</td><td><span class="pill" style="background:var(--blue)">BLU</span></td></tr>
+          <tr><td>70 – 180</td><td>None / Leggero</td><td><span class="pill" style="background:var(--ok-ink)">VERDE</span></td></tr>
+          <tr><td>181 – 240</td><td>Medio</td><td><span class="pill" style="background:var(--warn-ink)">ARANCIONE</span></td></tr>
+          <tr><td>&gt; 240</td><td>Grave</td><td><span class="pill" style="background:var(--danger-ink)">ROSSO</span></td></tr>
+        </tbody>
+      </table>
+      <p class="card-sub" style="margin-top:12px">⚠️ Suggerimento dose puramente indicativo (CF = <span id="sc-cf-lbl">40</span>). Non sostituisce il parere del diabetologo.</p>
+    </div>
+  </section>
+
+  <!-- ========================= ALIMENTI ========================= -->
+  <section class="view" id="view-alimenti">
+    <div class="card">
+      <div class="card-head"><svg viewBox="0 0 24 24"><path d="M4 12c0-3 2-5 5-5h6c3 0 5 2 5 5s-2 5-5 5H9c-3 0-5-2-5-5Z"/></svg> Database alimenti</div>
+      <p class="card-sub">Valori per 100 g. Questi alimenti sono selezionabili nel calcolatore dose.</p>
+      <div class="grid g2">
+        <div><label class="lab-sm">Nome</label><input id="a-nome" placeholder="es. Petto di pollo"></div>
+        <div><label class="lab-sm">Categoria</label><select id="a-cat"></select></div>
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <div class="grow"><label class="lab-sm">Nuova categoria</label><input id="a-newcat" placeholder="es. Latticini"></div>
+        <button class="ghost-btn compact" id="a-addcat">+ Aggiungi cat.</button>
+      </div>
+      <div class="grid g2" style="margin-top:10px">
+        <div><label class="lab-sm">Carboidrati / 100g</label><input type="number" id="a-carb" step="0.1" placeholder="0"></div>
+        <div><label class="lab-sm">Proteine / 100g</label><input type="number" id="a-prot" step="0.1" placeholder="0"></div>
+        <div><label class="lab-sm">Grassi / 100g</label><input type="number" id="a-fat" step="0.1" placeholder="0"></div>
+        <div><label class="lab-sm">Calorie (auto se vuoto)</label><input type="number" id="a-kcal" step="1" placeholder="auto"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary compact" id="a-add">Salva alimento</button>
+        <button class="ghost-btn compact" id="a-clear" style="display:none">Annulla modifica</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="flex-between">
+        <div class="card-head" style="margin:0">Salvati</div>
+        <div class="btn-row" style="margin:0;align-items:flex-end">
+          <div><label class="lab-sm">Cerca</label><input id="db-search" placeholder="nome..."></div>
+          <div><label class="lab-sm">Categoria</label><select id="db-filter"></select></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>Nome</th><th>Cat.</th><th>Carbo</th><th>Prot</th><th>Grassi</th><th>Kcal</th><th></th></tr></thead>
+        <tbody id="alimenti-body"></tbody>
+      </table>
+      <div class="empty" id="alimenti-empty">Database vuoto.</div>
+    </div>
+  </section>
+
+  <!-- ========================= IMPOSTAZIONI ========================= -->
+  <section class="view" id="view-impostazioni">
+    <div class="card">
+      <div class="card-head"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1L14.5 2h-5l-.3 2.6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.6h5l.3-2.6a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6a7 7 0 0 0 .1-1Z"/></svg> Parametri e target</div>
+      <p class="card-sub">Usati ovunque: calcolo dose, scompenso, statistiche.</p>
+      <h3>Soglie fasce glicemiche</h3>
+      <div class="grid g3">
+        <div><label class="lab-sm">Ipoglicemia sotto =</label><input type="number" id="t-low" value="70"></div>
+        <div><label class="lab-sm">Limite in range fino a =</label><input type="number" id="t-mid" value="180"></div>
+        <div><label class="lab-sm">Limite medio fino a =</label><input type="number" id="t-high" value="240"></div>
+      </div>
+      <h3>Parametri clinici</h3>
+      <div class="grid g3">
+        <div><label class="lab-sm">Target perfetto</label><input type="number" id="t-perfect" value="140"></div>
+        <div><label class="lab-sm">Fattore correzione CF</label><input type="number" id="t-cf" value="40"></div>
+        <div><label class="lab-sm">Rapporto I/C</label><input type="number" id="t-ic" value="10"></div>
+      </div>
+      <h3>Target dose (banda ottimale)</h3>
+      <div class="grid g2">
+        <div><label class="lab-sm">Target min</label><input type="number" id="t-tmin" value="120"></div>
+        <div><label class="lab-sm">Target max</label><input type="number" id="t-tmax" value="140"></div>
+      </div>
+      <h3>Etichette fasce</h3>
+      <div class="grid g2">
+        <div><input id="t-l0" value="Ipoglicemia"></div>
+        <div><input id="t-l1" value="In range"></div>
+        <div><input id="t-l2" value="Alto"></div>
+        <div><input id="t-l3" value="Molto alto"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary compact" id="t-save">Salva preferenze</button>
+        <button class="ghost-btn compact" id="t-reset">Default</button>
+        <button class="ghost-btn compact danger" id="t-wipe" style="margin-left:auto">Cancella tutti i dati</button>
+      </div>
+      <p class="card-sub" id="t-preview" style="margin-top:14px"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg> Nightscout & sincronizzazione</div>
+      <p class="card-sub">Dati salvati su MongoDB Atlas tramite il backend REST. Senza URL configurato i dati restano su questo dispositivo.</p>
+      <label class="lab-sm">URL Nightscout</label>
+      <input type="text" id="ns-url" placeholder="https://...onrender.com" autocomplete="off">
+      <label class="lab-sm" style="margin-top:10px">URL backend REST (MongoDB Atlas)</label>
+      <input type="text" id="api-base" placeholder="https://tuo-backend.example.com/api" autocomplete="off">
+      <label class="lab-sm" style="margin-top:10px">Codice di sincronizzazione</label>
+      <div class="btn-row" style="margin-top:6px">
+        <div class="grow"><input type="text" id="sync-code" placeholder="es. mario-2026" autocomplete="off"></div>
+        <button class="btn-primary compact" id="sync-save">Salva e sincronizza</button>
+      </div>
+      <div class="sync-status" id="sync-status">Non sincronizzato.</div>
+    </div>
+  </section>
+
+  <p class="note">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+    <span>Strumento di solo supporto. Consulta sempre il tuo diabetologo prima di modificare le dosi di insulina.</span>
+  </p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   STORAGE & STATO UNIFICATO
+   ============================================================ */
+const LS = {
+  readings:'gm_readings', foods:'gm_foods', settings:'gm_settings', cats:'gm_cats',
+  alimenti:'calc_insulina_alimenti', lastNs:'gm_last_ns_date', sync:'gm_sync_code'
+};
+const DEFAULT_SETTINGS = {
+  low:70, mid:180, high:240, perfect:140, cf:40, ic:10,
+  tmin:120, tmax:140,
+  labels:['Ipoglicemia','In range','Alto','Molto alto'],
+  nsUrl:'https://cgm-remote-monitor-1-slow.onrender.com',
+  apiBase:''
+};
+const DEFAULT_CATS = ['Carne','Pesce','Frutta','Verdura','Pasta'];
+
+function load(key, fb){ try{const v=localStorage.getItem(key);return v?JSON.parse(v):fb;}catch(e){return fb;} }
+function save(key, val){ try{localStorage.setItem(key, JSON.stringify(val));}catch(e){} }
+
+let readings = load(LS.readings, []);
+let foods    = load(LS.foods, []);
+let settings = Object.assign({}, DEFAULT_SETTINGS, load(LS.settings, {}));
+let cats     = load(LS.cats, DEFAULT_CATS.slice());
+let alimenti = load(LS.alimenti, []);            // pasto corrente nel calcolatore
+let lastNsDate = load(LS.lastNs, 0);             // dedup letture Nightscout
+let syncCode = load(LS.sync, null);
+
+let editReadingId = null, editFoodId = null;
+let currentGlicemia = null;
+let currentStep = 1;
+const charts = {};
+
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2200); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function nowTime(){ return new Date().toTimeString().slice(0,5); }
+
+const BAND_HEX = ['#2570c2','#1d7a4c','#9a6300','#b3261e'];
+function momentFromTime(t){ const h=parseInt(t.slice(0,2),10);
+  if(h<6)return'Notte'; if(h<11)return'Mattina'; if(h<14)return'Pranzo'; if(h<18)return'Pomeriggio'; return'Cena'; }
+function bandOf(v){ if(v<settings.low)return 0; if(v<=settings.mid)return 1; if(v<=settings.high)return 2; return 3; }
+function withinRange(days){
+  const cut=new Date(); cut.setHours(0,0,0,0); cut.setDate(cut.getDate()-(days-1));
+  return readings.filter(r=>new Date(r.data+'T00:00')>=cut);
+}
+
+/* ============================================================
+   SINCRONIZZAZIONE MONGODB ATLAS (REST)
+   ============================================================ */
+let syncing = false, pushTimer = null;
+function syncConfigured(){ return !!(settings.apiBase && settings.apiBase.startsWith('http') && syncCode); }
+function setSyncStatus(msg, cls){ const el=$('sync-status'); if(!el)return; el.textContent=msg; el.className='sync-status'+(cls?' '+cls:''); }
+
+function snapshot(){ return { codice:syncCode, readings, foods, settings, cats, alimenti, updated_at:new Date().toISOString() }; }
+
+function schedulePush(){ // debounce per non martellare il backend
+  if(!syncConfigured()) return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushSync, 800);
+}
+async function pushSync(){
+  if(!syncConfigured() || syncing) return;
+  try{
+    const res = await fetch(`${settings.apiBase}/dati`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(snapshot())
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    setSyncStatus(`Sincronizzato come "${syncCode}" ✓`, 'ok');
+  }catch(e){ setSyncStatus('Salvataggio cloud fallito: '+(e.message||e), 'err'); }
+}
+async function pullSync(){
+  if(!syncConfigured()) return;
+  setSyncStatus('Connessione…');
+  try{
+    syncing = true;
+    const res = await fetch(`${settings.apiBase}/dati?codice=${encodeURIComponent(syncCode)}`);
+    if(res.status===404){ syncing=false; await pushSync(); return; }
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    if(Array.isArray(d.readings)) { readings=d.readings; save(LS.readings, readings); }
+    if(Array.isArray(d.foods))    { foods=d.foods; save(LS.foods, foods); }
+    if(Array.isArray(d.cats))     { cats=d.cats; save(LS.cats, cats); }
+    if(Array.isArray(d.alimenti)) { alimenti=d.alimenti; save(LS.alimenti, alimenti); }
+    if(d.settings && typeof d.settings==='object'){ settings=Object.assign({}, DEFAULT_SETTINGS, d.settings); save(LS.settings, settings); }
+    syncing = false;
+    setSyncStatus(`Sincronizzato come "${syncCode}" ✓`, 'ok');
+    loadSettingsForm(); refreshCatSelects(); refreshPresets(); renderAll();
+  }catch(e){ syncing=false; setSyncStatus('Errore sincronizzazione: '+(e.message||e), 'err'); }
+}
+
+/* Salvataggi centralizzati: localStorage + push cloud */
+function saveReadings(){ save(LS.readings, readings); schedulePush(); }
+function saveFoods(){ save(LS.foods, foods); schedulePush(); }
+function saveCats(){ save(LS.cats, cats); schedulePush(); }
+function saveAlimenti(){ save(LS.alimenti, alimenti); schedulePush(); }
+function saveSettings(){ save(LS.settings, settings); schedulePush(); }
+
+/* ============================================================
+   NAVIGAZIONE TABS
+   ============================================================ */
+$('tabs').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#tabs .tab').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  $('view-'+b.dataset.v).classList.add('active');
+  renderAll();
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+/* ============================================================
+   STEPPER (DOSE)
+   ============================================================ */
+function goStep(n){
+  currentStep=n;
+  document.querySelectorAll('#view-dose .panel').forEach(p=>p.classList.toggle('active', +p.dataset.panel===n));
+  document.querySelectorAll('#view-dose .step-pill').forEach(s=>{
+    const sn=+s.dataset.step; s.classList.toggle('active', sn===n); s.classList.toggle('done', sn<n);
+  });
+  if(n===3) calcola();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ============================================================
+   NIGHTSCOUT
+   ============================================================ */
+const TREND_ARROWS = {DoubleUp:'⇈',SingleUp:'↑',FortyFiveUp:'↗',Flat:'→',FortyFiveDown:'↘',SingleDown:'↓',DoubleDown:'⇊',NONE:'—','NOT COMPUTABLE':'?'};
+const ICON_DANGER='<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>';
+const ICON_WARN='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
+const ICON_OK='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
+
+function bgState(g){ if(g==null)return''; if(g<settings.low||g>350)return'state-danger';
+  if(g<100)return'state-warn'; if(g>=settings.tmin&&g<=settings.tmax)return'state-ok'; return''; }
+
+async function fetchNS(){
+  document.querySelectorAll('#refresh-btn').forEach(b=>b.classList.add('spin'));
+  $('status-text').textContent='Aggiornamento…';
+  try{
+    const res = await fetch(`${settings.nsUrl}/api/v1/entries/sgv.json?count=2`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if(!data || data.length===0) throw new Error('Nessun dato');
+    const latest=data[0], prev=data[1];
+    currentGlicemia=latest.sgv;
+    const arrow=TREND_ARROWS[latest.direction]||'→';
+    $('glicemia-display').textContent=latest.sgv;
+    $('trend-display').textContent=arrow;
+    $('chip-glic').textContent=latest.sgv;
+    $('chip-trend').textContent=arrow;
+    $('bg-chip').className='bg-chip '+bgState(latest.sgv);
+
+    const date=new Date(latest.date);
+    const timeStr=date.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    $('time-display').textContent=timeStr;
+    const delta=prev?latest.sgv-prev.sgv:0;
+    $('delta-display').textContent=(delta>=0?'+':'')+delta;
+
+    const g=latest.sgv;
+    let alertHtml='';
+    if(g<settings.low) alertHtml=`<div class="alert alert-danger">${ICON_DANGER}<span>Ipoglicemia — non fare insulina, assumi zuccheri subito.</span></div>`;
+    else if(g<100) alertHtml=`<div class="alert alert-warn">${ICON_WARN}<span>Glicemia bassa — valuta con il medico prima di correggere.</span></div>`;
+    else if(g>350) alertHtml=`<div class="alert alert-danger">${ICON_DANGER}<span>Glicemia molto alta — contatta il medico.</span></div>`;
+    else if(g>=settings.tmin&&g<=settings.tmax) alertHtml=`<div class="alert alert-ok">${ICON_OK}<span>Glicemia nel target. Nessuna correzione necessaria.</span></div>`;
+    $('alert-box').innerHTML=alertHtml;
+    $('alert-box-3').innerHTML=alertHtml;
+    $('status-text').textContent=`Aggiornato alle ${timeStr}`;
+
+    // INTEGRAZIONE 1: salva la lettura nel diario (dedup per timestamp Nightscout)
+    autoSaveReading(latest);
+    // INTEGRAZIONE 4: scompenso usa la glicemia live
+    if($('sc-val')) $('sc-val').value = g;
+
+    calcola();
+  }catch(e){
+    $('status-text').textContent=`Errore: ${e.message}`;
+    $('glicemia-display').textContent='—';
+    $('chip-glic').textContent='—';
+  }finally{
+    document.querySelectorAll('#refresh-btn').forEach(b=>b.classList.remove('spin'));
+  }
+}
+
+function autoSaveReading(entry){
+  if(!entry || !entry.date) return;
+  if(entry.date <= lastNsDate) return;       // già salvata
+  const d=new Date(entry.date);
+  const data=d.toISOString().slice(0,10);
+  const ora=d.toTimeString().slice(0,5);
+  readings.push({ id:uid(), data, ora, val:entry.sgv, momento:momentFromTime(ora), note:'Nightscout', source:'ns' });
+  lastNsDate = entry.date;
+  save(LS.lastNs, lastNsDate);
+  saveReadings();
+  if($('view-diario').classList.contains('active')) renderDiario();
+}
+
+/* ============================================================
+   DOSE: lista alimenti del pasto
+   ============================================================ */
+function presetMap(){ // alimenti DB → {nome: carbo/100g}
+  const m={}; foods.forEach(f=>{ if(f.carb!=null) m[f.nome]=f.carb; }); return m;
+}
+function refreshPresets(){
+  const dl=$('food-presets'); if(!dl)return;
+  dl.innerHTML=Object.keys(presetMap()).map(n=>`<option value="${n}">`).join('');
+  const fn=$('food-name'); fn.setAttribute('list','food-presets');
+}
+$('food-name').addEventListener('input', e=>{
+  const v=presetMap()[e.target.value];
+  if(v!=null) $('food-carbs100').value=v;
+});
+
+function aggiungiAlimento(){
+  const name=$('food-name').value.trim()||'Alimento';
+  const carbs100=parseFloat($('food-carbs100').value);
+  const grams=parseFloat($('food-grams').value);
+  if(isNaN(carbs100)||isNaN(grams)||grams<=0){ $('food-grams').focus(); toast('Inserisci carbo/100g e grammi.'); return; }
+  const carbs=(carbs100*grams)/100;
+  alimenti.push({ name, carbs100, grams, carbs });
+  // INTEGRAZIONE 3: se non è in DB, lo salvo nel database alimenti
+  if(!foods.some(f=>f.nome.toLowerCase()===name.toLowerCase())){
+    foods.push({ id:uid(), nome:name, cat:cats[0]||'Altro', carb:carbs100, prot:0, fat:0, kcal:Math.round(carbs100*4) });
+    saveFoods(); refreshPresets();
+  }
+  $('food-name').value=''; $('food-carbs100').value=''; $('food-grams').value=''; $('food-name').focus();
+  renderAlimenti();
+}
+function rimuoviAlimento(i){ alimenti.splice(i,1); renderAlimenti(); }
+function modificaAlimento(i){
+  const a=alimenti[i]; if(!a)return;
+  const input=prompt(`Grammi di "${a.name}":`, a.grams);
+  if(input===null)return;
+  const grams=parseFloat(input.replace(',','.'));
+  if(isNaN(grams)||grams<=0||grams>2000){ alert('Inserisci una grammatura valida (1–2000 g).'); return; }
+  a.grams=grams; a.carbs=(a.carbs100*grams)/100; renderAlimenti();
+}
+function svuotaLista(){ if(alimenti.length===0)return; if(!confirm('Svuotare tutta la lista alimenti?'))return; alimenti=[]; renderAlimenti(); }
+
+function renderAlimenti(){
+  const ul=$('food-list');
+  if(alimenti.length===0){ ul.innerHTML='<li class="food-empty">Nessun alimento aggiunto</li>'; }
+  else{
+    ul.innerHTML=alimenti.map((a,i)=>`
+      <li>
+        <span class="f-name">${a.name}</span>
+        <span class="f-detail">${a.grams} g · ${a.carbs100} g/100</span>
+        <span class="f-carbs">${a.carbs.toFixed(0)} g</span>
+        <button class="f-edit" onclick="modificaAlimento(${i})" aria-label="Modifica grammi">✎</button>
+        <button class="f-del" onclick="rimuoviAlimento(${i})" aria-label="Rimuovi">×</button>
+      </li>`).join('');
+  }
+  $('clear-btn').style.display=alimenti.length?'block':'none';
+  const tot=alimenti.reduce((s,a)=>s+a.carbs,0);
+  $('carbs').value=tot>0?Math.round(tot):'';
+  $('carb-total-val').innerHTML=`${tot>0?Math.round(tot):0}<span> g</span>`;
+  saveAlimenti();
+  calcola();
+}
+function onCarbsManual(){
+  alimenti=[]; saveAlimenti();
+  $('food-list').innerHTML='<li class="food-empty">Nessun alimento aggiunto</li>';
+  $('clear-btn').style.display='none';
+  const v=parseFloat($('carbs').value);
+  $('carb-total-val').innerHTML=`${isNaN(v)?0:v}<span> g</span>`;
+  calcola();
+}
+
+function calcola(){
+  const carbs=parseFloat($('carbs').value);
+  $('recap-carbs').textContent=isNaN(carbs)?'—':carbs+' g';
+  $('recap-glic').textContent=currentGlicemia===null?'—':currentGlicemia+' mg/dl';
+  $('recap-params').textContent=`IC ${settings.ic} · CF ${settings.cf} · target ${settings.perfect}`;
+  $('target-display').textContent=`${settings.tmin}–${settings.tmax}`;
+  if(currentGlicemia===null){
+    $('dose-pasto').innerHTML='—<small> u</small>'; $('dose-correzione').innerHTML='—<small> u</small>';
+    $('dose-totale').textContent='—'; $('in-target').textContent='—'; return;
+  }
+  const g=currentGlicemia;
+  const dosePasto=isNaN(carbs)?0:Math.round(carbs/settings.ic);
+  const correzione=Math.round((g-settings.perfect)/settings.cf);
+  const totale=dosePasto+correzione;
+  $('dose-pasto').innerHTML=(isNaN(carbs)?'—':dosePasto)+'<small> u</small>';
+  $('dose-correzione').innerHTML=(correzione>=0?'+':'')+correzione+'<small> u</small>';
+  $('in-target').textContent=(g>=settings.tmin&&g<=settings.tmax)?'Sì ✓':(g<settings.tmin?'Bassa':'Alta');
+  $('dose-totale').textContent=totale<=0?'0':totale;
+}
+
+/* ============================================================
+   DIARIO
+   ============================================================ */
+$('d-data').value=todayStr(); $('d-ora').value=nowTime();
+$('d-add').addEventListener('click', ()=>{
+  const val=parseFloat($('d-val').value);
+  if(isNaN(val)||val<20||val>600){ toast('Valore glicemico non valido (20–600).'); return; }
+  const data=$('d-data').value||todayStr();
+  const ora=$('d-ora').value||nowTime();
+  let mom=$('d-momento').value; if(mom==='auto') mom=momentFromTime(ora);
+  const note=$('d-note').value.trim();
+  if(editReadingId){
+    const r=readings.find(x=>x.id===editReadingId);
+    Object.assign(r,{data,ora,val,momento:mom,note});
+    editReadingId=null; $('d-add').textContent='Aggiungi al diario'; $('d-cancel').style.display='none';
+    toast('Misurazione aggiornata.');
+  }else{
+    readings.push({id:uid(),data,ora,val,momento:mom,note,source:'manuale'});
+    toast('Misurazione aggiunta.');
+  }
+  saveReadings();
+  $('d-val').value=''; $('d-note').value=''; $('d-momento').value='auto'; $('d-live').textContent='';
+  renderAll();
+});
+$('d-cancel').addEventListener('click', ()=>{
+  editReadingId=null; $('d-add').textContent='Aggiungi al diario'; $('d-cancel').style.display='none';
+  $('d-val').value=''; $('d-note').value=''; $('d-live').textContent='';
+});
+$('d-val').addEventListener('input', ()=>{
+  const v=parseFloat($('d-val').value);
+  if(isNaN(v)){ $('d-live').textContent=''; return; }
+  const b=bandOf(v);
+  $('d-live').innerHTML=`<span class="pill" style="background:${BAND_HEX[b]}">${settings.labels[b]}</span>`;
+});
+$('f-reset').addEventListener('click', ()=>{ $('f-da').value=''; $('f-a').value=''; renderDiario(); });
+$('f-da').addEventListener('change', renderDiario);
+$('f-a').addEventListener('change', renderDiario);
+$('export').addEventListener('click', ()=>{
+  const blob=new Blob([JSON.stringify({readings,foods,settings,cats,alimenti},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='glicemia_backup_'+todayStr()+'.json'; a.click();
+});
+function filteredReadings(){
+  let list=readings.slice();
+  const da=$('f-da').value, a=$('f-a').value;
+  if(da) list=list.filter(r=>r.data>=da);
+  if(a) list=list.filter(r=>r.data<=a);
+  return list.sort((x,y)=>(y.data+y.ora).localeCompare(x.data+x.ora));
+}
+function renderDiario(){
+  const list=filteredReadings();
+  const body=$('diario-body'); body.innerHTML='';
+  $('diario-empty').style.display=list.length?'none':'block';
+  list.forEach(r=>{
+    const b=bandOf(r.val);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${r.data}</td><td>${r.ora}</td><td><span class="tag">${r.momento}</span></td>
+      <td><b>${r.val}</b></td>
+      <td><span class="pill" style="background:${BAND_HEX[b]}">${settings.labels[b]}</span></td>
+      <td class="muted">${r.note||'—'}</td>
+      <td class="actions"><a data-edit="${r.id}">Modifica</a><a class="del" data-del="${r.id}">Elimina</a></td>`;
+    body.appendChild(tr);
+  });
+  const chrono=list.slice().reverse();
+  drawChart('chart-trend','line',{
+    labels:chrono.map(r=>r.data+' '+r.ora),
+    datasets:[{label:'Glicemia',data:chrono.map(r=>r.val),borderColor:'#157f6b',
+      backgroundColor:'rgba(21,127,107,.12)',fill:true,tension:.3,
+      pointBackgroundColor:chrono.map(r=>BAND_HEX[bandOf(r.val)])}]
+  }, axisOpts());
+}
+document.addEventListener('click', e=>{
+  const ed=e.target.dataset.edit, dl=e.target.dataset.del;
+  if(ed){ const r=readings.find(x=>x.id===ed); if(!r)return;
+    $('d-data').value=r.data; $('d-ora').value=r.ora; $('d-val').value=r.val;
+    $('d-momento').value=r.momento; $('d-note').value=r.note||'';
+    editReadingId=ed; $('d-add').textContent='Salva modifiche'; $('d-cancel').style.display='inline-block';
+    $('d-val').dispatchEvent(new Event('input')); window.scrollTo({top:0,behavior:'smooth'});
+  }
+  if(dl){ if(confirm('Eliminare questa misurazione?')){
+    readings=readings.filter(x=>x.id!==dl); saveReadings(); renderAll(); toast('Eliminata.'); } }
+});
+
+/* ============================================================
+   STATISTICHE
+   ============================================================ */
+$('stats-range').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  $('stats-range').querySelectorAll('button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); $('stats-range').dataset.range=b.dataset.r; renderStats();
+});
+function renderStats(){
+  const days=+$('stats-range').dataset.range;
+  const list=withinRange(days);
+  const counts=[0,0,0,0]; list.forEach(r=>counts[bandOf(r.val)]++);
+  const total=list.length||1;
+  const ranges=[`< ${settings.low}`,`${settings.low}–${settings.mid}`,`${settings.mid+1}–${settings.high}`,`> ${settings.high}`];
+  const stats=$('tempo-stats'); stats.innerHTML='';
+  counts.forEach((c,i)=>{
+    const pct=(c/total*100).toFixed(1);
+    stats.innerHTML+=`<div class="stat" style="border-color:${BAND_HEX[i]}">
+      <div class="v" style="color:${BAND_HEX[i]}">${pct}%</div>
+      <div class="l">${settings.labels[i]} (${ranges[i]}) · ${c} mis.</div></div>`;
+  });
+  const bar=$('tir-bar'); bar.innerHTML='';
+  counts.forEach((c,i)=>{ const w=c/total*100; if(w>0) bar.innerHTML+=`<span style="width:${w}%;background:${BAND_HEX[i]}">${w>8?w.toFixed(0)+'%':''}</span>`; });
+  if(list.length===0) bar.innerHTML='<span style="width:100%;background:var(--bg-2);color:var(--ink-faint)">Nessun dato</span>';
+  const lg=$('tir-legend'); lg.innerHTML='';
+  settings.labels.forEach((l,i)=>lg.innerHTML+=`<span><i style="background:${BAND_HEX[i]}"></i>${l}</span>`);
+  drawChart('chart-tir','doughnut',{
+    labels:settings.labels.map((l,i)=>`${l} (${ranges[i]})`),
+    datasets:[{data:counts,backgroundColor:BAND_HEX,borderColor:'#fff',borderWidth:3}]
+  },{plugins:{legend:{position:'bottom',labels:{color:'#59665f'}}}});
+
+  const avg=list.length?list.reduce((s,r)=>s+r.val,0)/list.length:null;
+  $('m-avg').textContent=avg!=null?avg.toFixed(0):'–';
+  $('m-gmi').textContent=avg!=null?(3.31+0.02392*avg).toFixed(1)+'%':'–';
+  $('m-cnt').textContent=list.length;
+  const order=['Notte','Mattina','Pranzo','Pomeriggio','Cena'];
+  const buckets={}; order.forEach(o=>buckets[o]=[]);
+  list.forEach(r=>{(buckets[r.momento]||(buckets[r.momento]=[])).push(r.val);});
+  const momAvg=order.map(o=>buckets[o].length?buckets[o].reduce((s,v)=>s+v,0)/buckets[o].length:null);
+  drawChart('chart-momenti','bar',{
+    labels:order, datasets:[{label:'Media mg/dl',data:momAvg,
+      backgroundColor:momAvg.map(v=>v==null?'#ccc':BAND_HEX[bandOf(v)])}]
+  }, axisOpts());
+  const byDay={}; list.forEach(r=>{(byDay[r.data]||(byDay[r.data]=[])).push(r.val);});
+  const dayKeys=Object.keys(byDay).sort();
+  const dayAvg=dayKeys.map(d=>{const a=byDay[d];return a.reduce((s,v)=>s+v,0)/a.length;});
+  drawChart('chart-daily','line',{
+    labels:dayKeys, datasets:[{label:'Media giornaliera',data:dayAvg,borderColor:'#0d5a4c',
+      backgroundColor:'rgba(13,90,76,.12)',fill:true,tension:.3}]
+  }, axisOpts());
+}
+
+/* ============================================================
+   SCOMPENSO
+   ============================================================ */
+$('sc-calc').addEventListener('click', calcScompenso);
+$('sc-val').addEventListener('keydown', e=>{ if(e.key==='Enter') calcScompenso(); });
+function classifyScompenso(v){
+  if(v<70) return {lvl:'RISCHIO IPOGLICEMIA',color:'var(--blue)',key:'ipo'};
+  if(v<=180) return {lvl:'SCOMPENSO LEGGERO / NONE',color:'var(--ok-ink)',key:'leggero'};
+  if(v<=240) return {lvl:'SCOMPENSO MEDIO',color:'var(--warn-ink)',key:'medio'};
+  return {lvl:'SCOMPENSO GRAVE',color:'var(--danger-ink)',key:'grave'};
+}
+function calcScompenso(){
+  const v=parseFloat($('sc-val').value);
+  const target=parseFloat($('sc-target').value)||settings.perfect;
+  if(isNaN(v)){ toast('Inserisci la glicemia attuale.'); return; }
+  const c=classifyScompenso(v);
+  const diff=v-target;
+  const dose=diff>0?(diff/settings.cf):0;
+  let advice;
+  if(c.key==='ipo') advice='⚠️ Non somministrare insulina. Trattare l\'ipoglicemia (zuccheri rapidi) e ricontrollare.';
+  else if(diff<=0) advice='Glicemia a target o sotto: nessuna correzione necessaria.';
+  else advice=`Correzione indicativa: <b>${dose.toFixed(1)} U</b> (Δ ${diff>0?'+':''}${diff} mg/dl ÷ CF ${settings.cf}).`;
+  $('sc-result').innerHTML=`<div class="scomp-card" style="border-color:${c.color};background:${c.color}1a">
+    <div class="lvl" style="color:${c.color}">${c.lvl}</div>
+    <div class="det">Glicemia ${v} · Target ${target} · Δ ${diff>0?'+':''}${diff}</div>
+    <div class="det" style="margin-top:8px">${advice}</div></div>`;
+}
+
+/* ============================================================
+   ALIMENTI (DATABASE)
+   ============================================================ */
+function refreshCatSelects(){
+  const a=$('a-cat'), f=$('db-filter');
+  const cur=a.value;
+  a.innerHTML=cats.map(c=>`<option>${c}</option>`).join('');
+  if(cats.includes(cur)) a.value=cur;
+  f.innerHTML='<option value="">Tutte</option>'+cats.map(c=>`<option>${c}</option>`).join('');
+}
+$('a-addcat').addEventListener('click', ()=>{
+  const c=$('a-newcat').value.trim(); if(!c)return;
+  if(cats.includes(c)){ toast('Categoria già esistente.'); }
+  else{ cats.push(c); saveCats(); refreshCatSelects(); toast('Categoria aggiunta.'); }
+  $('a-cat').value=c; $('a-newcat').value='';
+});
+$('a-add').addEventListener('click', ()=>{
+  const nome=$('a-nome').value.trim();
+  if(!nome){ toast('Inserisci il nome dell\'alimento.'); return; }
+  const carb=+$('a-carb').value||0, prot=+$('a-prot').value||0, fat=+$('a-fat').value||0;
+  let kcal=+$('a-kcal').value; if(!kcal) kcal=Math.round(carb*4+prot*4+fat*9);
+  const cat=$('a-cat').value||cats[0];
+  if(editFoodId){
+    const f=foods.find(x=>x.id===editFoodId);
+    Object.assign(f,{nome,cat,carb,prot,fat,kcal});
+    editFoodId=null; $('a-add').textContent='Salva alimento'; $('a-clear').style.display='none';
+    toast('Alimento aggiornato.');
+  }else{
+    foods.push({id:uid(),nome,cat,carb,prot,fat,kcal});
+    toast('Alimento salvato.');
+  }
+  saveFoods(); refreshPresets();
+  $('a-nome').value='';$('a-carb').value='';$('a-prot').value='';$('a-fat').value='';$('a-kcal').value='';
+  renderDB();
+});
+$('a-clear').addEventListener('click', ()=>{
+  editFoodId=null; $('a-add').textContent='Salva alimento'; $('a-clear').style.display='none';
+  $('a-nome').value='';$('a-carb').value='';$('a-prot').value='';$('a-fat').value='';$('a-kcal').value='';
+});
+$('db-search').addEventListener('input', renderDB);
+$('db-filter').addEventListener('change', renderDB);
+function renderDB(){
+  const q=$('db-search').value.toLowerCase(), fc=$('db-filter').value;
+  let list=foods.filter(f=>(!q||f.nome.toLowerCase().includes(q))&&(!fc||f.cat===fc));
+  list.sort((a,b)=>a.nome.localeCompare(b.nome));
+  const body=$('alimenti-body'); body.innerHTML='';
+  $('alimenti-empty').style.display=list.length?'none':'block';
+  list.forEach(f=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><b>${f.nome}</b></td><td><span class="tag">${f.cat}</span></td>
+      <td>${f.carb} g</td><td>${f.prot} g</td><td>${f.fat} g</td><td>${f.kcal}</td>
+      <td class="actions"><a data-fedit="${f.id}">Modifica</a><a class="del" data-fdel="${f.id}">Elimina</a></td>`;
+    body.appendChild(tr);
+  });
+}
+document.addEventListener('click', e=>{
+  const fe=e.target.dataset.fedit, fd=e.target.dataset.fdel;
+  if(fe){ const f=foods.find(x=>x.id===fe); if(!f)return;
+    $('a-nome').value=f.nome; $('a-cat').value=f.cat; $('a-carb').value=f.carb;
+    $('a-prot').value=f.prot; $('a-fat').value=f.fat; $('a-kcal').value=f.kcal;
+    editFoodId=fe; $('a-add').textContent='Salva modifiche'; $('a-clear').style.display='inline-block';
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  if(fd){ if(confirm('Eliminare questo alimento dal database?')){
+    foods=foods.filter(x=>x.id!==fd); saveFoods(); refreshPresets(); renderDB(); toast('Alimento eliminato.'); } }
+});
+
+/* ============================================================
+   IMPOSTAZIONI
+   ============================================================ */
+function loadSettingsForm(){
+  $('t-low').value=settings.low; $('t-mid').value=settings.mid; $('t-high').value=settings.high;
+  $('t-perfect').value=settings.perfect; $('t-cf').value=settings.cf; $('t-ic').value=settings.ic;
+  $('t-tmin').value=settings.tmin; $('t-tmax').value=settings.tmax;
+  $('t-l0').value=settings.labels[0]; $('t-l1').value=settings.labels[1];
+  $('t-l2').value=settings.labels[2]; $('t-l3').value=settings.labels[3];
+  $('ns-url').value=settings.nsUrl||''; $('api-base').value=settings.apiBase||'';
+  $('sync-code').value=syncCode||'';
+  $('sc-target').value=settings.perfect;
+  $('sc-target-lbl').textContent=settings.perfect; $('sc-cf-lbl').textContent=settings.cf;
+  updatePreview();
+}
+function updatePreview(){
+  $('t-preview').innerHTML=`Fasce attive:
+    <span class="pill" style="background:${BAND_HEX[0]}">&lt;${$('t-low').value}</span>
+    <span class="pill" style="background:${BAND_HEX[1]}">${$('t-low').value}–${$('t-mid').value}</span>
+    <span class="pill" style="background:${BAND_HEX[2]}">${+$('t-mid').value+1}–${$('t-high').value}</span>
+    <span class="pill" style="background:${BAND_HEX[3]}">&gt;${$('t-high').value}</span>`;
+}
+['t-low','t-mid','t-high'].forEach(id=>$(id).addEventListener('input', updatePreview));
+$('t-save').addEventListener('click', ()=>{
+  const low=+$('t-low').value, mid=+$('t-mid').value, high=+$('t-high').value;
+  if(!(low<mid&&mid<high)){ toast('Soglie crescenti richieste: low < mid < high.'); return; }
+  const tmin=+$('t-tmin').value||120, tmax=+$('t-tmax').value||140;
+  if(tmin>tmax){ toast('Target min non può superare target max.'); return; }
+  settings=Object.assign({}, settings, {
+    low, mid, high, tmin, tmax,
+    perfect:+$('t-perfect').value||140, cf:+$('t-cf').value||40, ic:+$('t-ic').value||10,
+    labels:[$('t-l0').value,$('t-l1').value,$('t-l2').value,$('t-l3').value],
+    nsUrl:$('ns-url').value.trim()||DEFAULT_SETTINGS.nsUrl,
+    apiBase:$('api-base').value.trim()
+  });
+  saveSettings();
+  $('sc-target').value=settings.perfect; $('sc-target-lbl').textContent=settings.perfect; $('sc-cf-lbl').textContent=settings.cf;
+  toast('Preferenze salvate e applicate.'); renderAll();
+});
+$('t-reset').addEventListener('click', ()=>{
+  settings=Object.assign({}, DEFAULT_SETTINGS, {nsUrl:settings.nsUrl, apiBase:settings.apiBase});
+  saveSettings(); loadSettingsForm(); renderAll(); toast('Target ripristinati.');
+});
+$('t-wipe').addEventListener('click', ()=>{
+  if(confirm('Cancellare TUTTI i dati locali? Operazione irreversibile.')){
+    Object.values(LS).forEach(k=>localStorage.removeItem(k));
+    readings=[]; foods=[]; cats=DEFAULT_CATS.slice(); alimenti=[]; lastNsDate=0;
+    settings=Object.assign({}, DEFAULT_SETTINGS); syncCode=null;
+    loadSettingsForm(); refreshCatSelects(); refreshPresets(); renderAll(); toast('Tutti i dati cancellati.');
+  }
+});
+$('sync-save').addEventListener('click', async ()=>{
+  settings.apiBase=$('api-base').value.trim();
+  settings.nsUrl=$('ns-url').value.trim()||DEFAULT_SETTINGS.nsUrl;
+  save(LS.settings, settings);
+  syncCode=$('sync-code').value.trim().toLowerCase()||null;
+  save(LS.sync, syncCode);
+  if(!settings.apiBase){ setSyncStatus('Backend non configurato — i dati restano su questo dispositivo.'); return; }
+  if(!syncCode){ setSyncStatus('Inserisci un codice di sincronizzazione.', 'err'); return; }
+  await pullSync();   // scarica dati esistenti dal cloud (o crea se 404)
+});
+
+/* ============================================================
+   CHART HELPER
+   ============================================================ */
+function axisOpts(){
+  return {scales:{y:{grid:{color:'rgba(22,32,27,.06)'},ticks:{color:'#59665f'}},
+    x:{grid:{color:'rgba(22,32,27,.04)'},ticks:{color:'#59665f',maxRotation:60,minRotation:0}}},
+    plugins:{legend:{labels:{color:'#59665f'}}}};
+}
+function drawChart(id,type,data,extra){
+  const ctx=$(id); if(!ctx)return;
+  if(charts[id]) charts[id].destroy();
+  charts[id]=new Chart(ctx,{type,data,options:Object.assign({responsive:true,maintainAspectRatio:false}, extra||{})});
+}
+
+/* ============================================================
+   RENDER GLOBALE
+   ============================================================ */
+function renderAll(){
+  refreshCatSelects(); refreshPresets();
+  renderAlimenti(); renderDiario(); renderStats(); renderDB();
+  $('sc-target-lbl').textContent=settings.perfect; $('sc-cf-lbl').textContent=settings.cf;
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+loadSettingsForm();
+renderAll();
+if(syncConfigured()) pullSync();
+fetchNS();
+setInterval(fetchNS, 5*60*1000);
+</script>
+</body>
+</html>
