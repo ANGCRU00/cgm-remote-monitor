@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#f3f6f2" />
+<title>Calcolatore insulina · Nightscout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Spline+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:        #f1f5f0;
+    --bg-2:      #e7eee4;
+    --surface:   #ffffff;
+    --ink:       #16201b;
+    --ink-soft:  #59665f;
+    --ink-faint: #8b968f;
+    --line:      #e2e8df;
+    --line-2:    #d3dccd;
+
+    --brand:     #157f6b;
+    --brand-ink: #0d5a4c;
+    --brand-bg:  #e3f3ee;
+
+    --ok-ink:    #1d7a4c;  --ok-bg:    #e4f4e9;  --ok-line:    #b6e0c4;
+    --warn-ink:  #9a6300;  --warn-bg:  #fbf0d8;  --warn-line:  #f0d59a;
+    --danger-ink:#b3261e;  --danger-bg:#fbe6e4;  --danger-line:#f1c4c0;
+
+    --radius:    26px;
+    --radius-sm: 16px;
+    --shadow:    0 1px 2px rgba(22,32,27,.04), 0 12px 30px rgba(22,32,27,.07);
+    --shadow-sm: 0 1px 2px rgba(22,32,27,.05), 0 6px 16px rgba(22,32,27,.06);
+
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --body:    "Spline Sans", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: var(--body);
+    color: var(--ink);
+    background:
+      radial-gradient(120% 60% at 100% 0%, var(--bg-2), transparent 55%),
+      radial-gradient(100% 50% at 0% 100%, #eaf2e9, transparent 50%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    overflow-x: hidden;
+  }
+
+  .wrap {
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 0 16px calc(40px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- Sticky header: glicemia sempre visibile ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: 0 -16px 18px;
+    padding: 14px 18px calc(14px) ;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar-inner {
+    max-width: 460px; margin: 0 auto;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .brandmark {
+    display: flex; align-items: center; gap: 9px;
+    font-family: var(--display); font-weight: 700; font-size: 15px;
+    letter-spacing: -.2px; color: var(--ink); flex: 1; min-width: 0;
+  }
+  .brandmark .dot {
+    width: 30px; height: 30px; flex-shrink: 0;
+    border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(150deg, var(--brand), #1aa085);
+    box-shadow: 0 4px 12px rgba(21,127,107,.35);
+  }
+  .brandmark .dot svg { width: 17px; height: 17px; stroke: #fff; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+  .brandmark .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .bg-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 13px 7px 11px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line);
+    box-shadow: var(--shadow-sm); flex-shrink: 0;
+  }
+  .bg-chip .v { font-family: var(--display); font-weight: 800; font-size: 22px; line-height: 1; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+  .bg-chip .ar { font-size: 17px; color: var(--ink-soft); }
+  .bg-chip .u  { font-size: 10.5px; color: var(--ink-faint); font-weight: 600; }
+  .bg-chip.state-ok     { background: var(--ok-bg);     border-color: var(--ok-line); }
+  .bg-chip.state-ok .v     { color: var(--ok-ink); }
+  .bg-chip.state-warn   { background: var(--warn-bg);   border-color: var(--warn-line); }
+  .bg-chip.state-warn .v   { color: var(--warn-ink); }
+  .bg-chip.state-danger { background: var(--danger-bg); border-color: var(--danger-line); }
+  .bg-chip.state-danger .v { color: var(--danger-ink); }
+
+  /* ---------- Stepper ---------- */
+  .steps {
+    display: flex; align-items: center; gap: 6px;
+    margin: 2px 2px 20px;
+  }
+  .step-pill {
+    flex: 1; display: flex; align-items: center; gap: 9px;
+    cursor: pointer; user-select: none;
+  }
+  .step-pill .n {
+    width: 27px; height: 27px; flex-shrink: 0;
+    border-radius: 50%; display: grid; place-items: center;
+    font-family: var(--display); font-weight: 700; font-size: 13px;
+    background: var(--surface); color: var(--ink-faint);
+    border: 1.5px solid var(--line-2); transition: .2s;
+  }
+  .step-pill .lab { font-size: 12px; font-weight: 600; color: var(--ink-faint); transition: .2s; white-space: nowrap; }
+  .step-pill .bar { flex: 1; height: 2px; border-radius: 2px; background: var(--line-2); transition: .2s; }
+  .step-pill.active .n { background: var(--brand); color: #fff; border-color: var(--brand); box-shadow: 0 4px 12px rgba(21,127,107,.35); }
+  .step-pill.active .lab { color: var(--brand-ink); }
+  .step-pill.done .n { background: var(--brand-bg); color: var(--brand); border-color: var(--ok-line); }
+  .step-pill.done .bar { background: var(--brand); }
+  @media (max-width: 380px) { .step-pill .lab { display: none; } }
+
+  /* ---------- Panels ---------- */
+  .panel { display: none; animation: fade .35s ease both; }
+  .panel.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-bottom: 14px;
+    box-shadow: var(--shadow);
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--display); font-weight: 700; font-size: 17px;
+    letter-spacing: -.2px; margin: 0 0 4px;
+  }
+  .card-head svg { width: 19px; height: 19px; stroke: var(--brand); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .card-sub { font-size: 13.5px; color: var(--ink-soft); margin: 0 0 18px; }
+
+  /* ---------- Step 1: glicemia ---------- */
+  .reading {
+    text-align: center; padding: 8px 0 4px;
+  }
+  .reading .big {
+    font-family: var(--display); font-weight: 800;
+    font-size: 84px; line-height: .9; letter-spacing: -3px;
+    font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: baseline; gap: 10px;
+  }
+  .reading .big .trend { font-size: 44px; color: var(--ink-soft); letter-spacing: 0; }
+  .reading .u { font-size: 14px; color: var(--ink-faint); font-weight: 600; margin-top: 6px; letter-spacing: .3px; }
+
+  .reading-meta {
+    display: flex; justify-content: center; gap: 22px;
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line);
+  }
+  .reading-meta div { text-align: center; }
+  .reading-meta .lab { font-size: 11px; color: var(--ink-faint); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .reading-meta .val { font-family: var(--display); font-weight: 700; font-size: 17px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+  .refresh-btn {
+    margin-top: 18px; width: 100%;
+    font-family: var(--body); font-size: 14px; font-weight: 600;
+    padding: 13px 16px; cursor: pointer;
+    border-radius: var(--radius-sm); border: 1px solid var(--line-2);
+    background: var(--bg); color: var(--ink-soft);
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .18s, transform .1s;
+  }
+  .refresh-btn svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .refresh-btn:hover { background: var(--bg-2); }
+  .refresh-btn:active { transform: scale(.98); }
+  .refresh-btn.spin svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .status { text-align: center; font-size: 12.5px; color: var(--ink-faint); margin-top: 12px; }
+
+  /* ---------- Alerts ---------- */
+  .alert {
+    border-radius: var(--radius-sm);
+    padding: 14px 16px; font-size: 13.5px; font-weight: 600;
+    margin-bottom: 14px; display: flex; align-items: flex-start; gap: 11px;
+    line-height: 1.4;
+  }
+  .alert svg { width: 20px; height: 20px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-top: 1px; }
+  .alert-ok     { background: var(--ok-bg);     color: var(--ok-ink);     border: 1px solid var(--ok-line); }
+  .alert-warn   { background: var(--warn-bg);   color: var(--warn-ink);   border: 1px solid var(--warn-line); }
+  .alert-danger { background: var(--danger-bg); color: var(--danger-ink); border: 1px solid var(--danger-line); }
+
+  /* ---------- Inputs ---------- */
+  .field-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-bottom: 9px;
+  }
+  input[type=text], input[type=number] {
+    font-family: var(--body); font-size: 16px; font-weight: 500;
+    padding: 14px 15px; border-radius: var(--radius-sm);
+    border: 1.5px solid var(--line-2); background: var(--surface); color: var(--ink);
+    width: 100%; transition: border-color .15s, box-shadow .15s;
+  }
+  input::placeholder { color: var(--ink-faint); font-weight: 400; }
+  input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 4px rgba(21,127,107,.14); }
+
+  .food-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .food-form input#food-name { grid-column: 1 / -1; }
+
+  .btn-primary {
+    font-family: var(--body); font-size: 15px; font-weight: 700; cursor: pointer;
+    padding: 14px 16px; border-radius: var(--radius-sm); border: none;
+    background: var(--brand); color: #fff;
+    box-shadow: 0 6px 16px rgba(21,127,107,.32);
+    transition: transform .1s, background .18s; width: 100%;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-primary:hover { background: #12705f; }
+  .btn-primary:active { transform: scale(.985); }
+  .food-form .btn-primary { grid-column: 1 / -1; }
+
+  /* ---------- Food list ---------- */
+  .food-list { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .food-list li {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 11px 8px 11px 14px;
+  }
+  .food-list .f-name { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .food-list .f-detail { font-size: 11.5px; color: var(--ink-faint); }
+  .food-list .f-carbs { font-family: var(--display); font-weight: 700; font-size: 14px; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+  .food-list .f-edit, .food-list .f-del {
+    cursor: pointer; border: none; background: transparent;
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    font-size: 17px; line-height: 1; transition: background .15s;
+  }
+  .food-list .f-edit { color: var(--brand); }
+  .food-list .f-del  { color: var(--danger-ink); font-size: 21px; }
+  .food-list .f-edit:hover, .food-list .f-del:hover { background: rgba(0,0,0,.05); }
+  .food-empty { font-size: 13px; color: var(--ink-faint); text-align: center; padding: 16px 0; }
+
+  .carb-total {
+    margin-top: 16px; padding: 16px 18px;
+    border-radius: var(--radius-sm); background: var(--brand-bg);
+    border: 1px solid var(--ok-line);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .carb-total .lab { font-size: 13px; font-weight: 600; color: var(--brand-ink); }
+  .carb-total .val { font-family: var(--display); font-weight: 800; font-size: 26px; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+  .carb-total .val span { font-size: 14px; font-weight: 600; }
+
+  .ghost-btn {
+    margin-top: 12px; width: 100%;
+    font-family: var(--body); font-size: 13px; font-weight: 600; cursor: pointer;
+    padding: 11px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line-2); background: transparent; color: var(--ink-soft);
+    transition: background .18s;
+  }
+  .ghost-btn:hover { background: var(--bg); }
+  .ghost-btn.danger { color: var(--danger-ink); border-color: var(--danger-line); }
+
+  .manual-toggle { margin-top: 14px; }
+  details.manual { margin-top: 14px; }
+  details.manual > summary {
+    cursor: pointer; list-style: none; font-size: 13px; font-weight: 600;
+    color: var(--brand); padding: 6px 0;
+  }
+  details.manual > summary::-webkit-details-marker { display: none; }
+  details.manual > summary::before { content: "＋ "; }
+  details.manual[open] > summary::before { content: "－ "; }
+
+  /* ---------- Step 3: dose result ---------- */
+  .dose-hero {
+    text-align: center;
+    background: linear-gradient(160deg, var(--brand) 0%, #0f9a7e 100%);
+    border-radius: var(--radius); padding: 30px 22px; color: #fff;
+    box-shadow: 0 18px 40px rgba(15,90,76,.4);
+    position: relative; overflow: hidden;
+  }
+  .dose-hero .lab { font-size: 13px; font-weight: 600; opacity: .9; }
+  .dose-hero .big {
+    font-family: var(--display); font-weight: 800;
+    font-size: 92px; line-height: .95; letter-spacing: -3px; margin: 6px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .dose-hero .big span { font-size: 26px; font-weight: 700; opacity: .9; }
+  .dose-hero .sub { font-size: 13px; opacity: .85; margin-top: 6px; }
+
+  .breakdown { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .breakdown .b {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius-sm); padding: 16px 14px; text-align: center;
+    box-shadow: var(--shadow-sm);
+  }
+  .breakdown .lab { font-size: 11.5px; color: var(--ink-faint); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+  .breakdown .val { font-family: var(--display); font-weight: 800; font-size: 30px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .breakdown .val small { font-size: 13px; font-weight: 600; color: var(--ink-faint); }
+  .breakdown .b.pasto .val { color: var(--brand-ink); }
+
+  .recap { margin-top: 14px; }
+  .recap-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13.5px; padding: 9px 0; border-bottom: 1px dashed var(--line);
+  }
+  .recap-row:last-child { border-bottom: none; }
+  .recap-row .k { color: var(--ink-soft); }
+  .recap-row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  /* ---------- Nav ---------- */
+  .nav { display: flex; gap: 10px; margin-top: 6px; }
+  .nav .btn-primary { flex: 2; }
+  .nav .btn-back {
+    flex: 1; font-family: var(--body); font-size: 15px; font-weight: 600; cursor: pointer;
+    padding: 14px 16px; border-radius: var(--radius-sm);
+    border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-soft);
+    transition: background .18s;
+  }
+  .nav .btn-back:hover { background: var(--bg); }
+
+  /* ---------- Sync (collapsible footer) ---------- */
+  details.sync { margin-top: 8px; }
+  details.sync > summary {
+    cursor: pointer; list-style: none; text-align: center;
+    font-size: 12.5px; font-weight: 600; color: var(--ink-faint); padding: 10px;
+  }
+  details.sync > summary::-webkit-details-marker { display: none; }
+  .sync-status { font-size: 12.5px; color: var(--ink-faint); margin-top: 10px; text-align: center; }
+  .sync-status.ok { color: var(--ok-ink); }
+  .sync-status.err { color: var(--danger-ink); }
+
+  .note {
+    font-size: 12px; color: var(--ink-faint); margin-top: 22px;
+    line-height: 1.55; text-align: center; padding: 0 12px;
+    display: flex; gap: 8px; align-items: flex-start; justify-content: center;
+  }
+  .note svg { width: 15px; height: 15px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 2; margin-top: 1px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel, .refresh-btn.spin svg { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brandmark">
+      <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 2.5C12 2.5 5 10 5 14.5a7 7 0 0 0 14 0C19 10 12 2.5 12 2.5Z"/></svg></span>
+      <span class="txt">Calcolatore insulina</span>
+    </div>
+    <div class="bg-chip" id="bg-chip" title="Glicemia attuale">
+      <span class="v" id="chip-glic">—</span>
+      <span class="ar" id="chip-trend"></span>
+      <span class="u">mg/dl</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <h1 class="sr-only">Calcolatore insulina con dati in tempo reale da Nightscout</h1>
+
+  <!-- Stepper -->
+  <div class="steps">
+    <div class="step-pill active" data-step="1" onclick="goStep(1)">
+      <span class="n">1</span><span class="lab">Glicemia</span><span class="bar"></span>
+    </div>
+    <div class="step-pill" data-step="2" onclick="goStep(2)">
+      <span class="n">2</span><span class="lab">Cosa mangi</span><span class="bar"></span>
+    </div>
+    <div class="step-pill" data-step="3" onclick="goStep(3)">
+      <span class="n">3</span><span class="lab">Dose</span>
+    </div>
+  </div>
+
+  <!-- ====== STEP 1 : Glicemia ====== -->
+  <section class="panel active" data-panel="1">
+    <div class="card">
+      <div class="card-head">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l2 6 4-14 2 8h6"/></svg>
+        Glicemia attuale
+      </div>
+      <p class="card-sub">Letta automaticamente dal tuo sensore (Nightscout).</p>
+
+      <div class="reading">
+        <div class="big"><span id="glicemia-display">—</span><span class="trend" id="trend-display"></span></div>
+        <div class="u">mg/dl</div>
+
+        <div class="reading-meta">
+          <div>
+            <div class="lab">Ultima lettura</div>
+            <div class="val" id="time-display">—</div>
+          </div>
+          <div>
+            <div class="lab">Variazione</div>
+            <div class="val" id="delta-display">—</div>
+          </div>
+          <div>
+            <div class="lab">Target</div>
+            <div class="val">120–140</div>
+          </div>
+        </div>
+      </div>
+
+      <button class="refresh-btn" id="refresh-btn" onclick="fetchNS()">
+        <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+        Aggiorna
+      </button>
+      <div class="status" id="status-text">Caricamento in corso…</div>
+    </div>
+
+    <div id="alert-box"></div>
+
+    <div class="nav">
+      <button class="btn-primary" onclick="goStep(2)">
+        Continua
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ====== STEP 2 : Alimenti ====== -->
+  <section class="panel" data-panel="2">
+    <div class="card">
+      <div class="card-head">
+        <svg viewBox="0 0 24 24"><path d="M4 12c0-3 2-5 5-5h6c3 0 5 2 5 5s-2 5-5 5H9c-3 0-5-2-5-5Z"/><path d="M8 12h.01M12 12h.01M16 12h.01"/></svg>
+        Cosa stai mangiando?
+      </div>
+      <p class="card-sub">Aggiungi gli alimenti: i carboidrati si sommano da soli.</p>
+
+      <div class="food-form">
+        <input type="text" id="food-name" placeholder="Nome (es. Pane)" autocomplete="off" />
+        <input type="number" id="food-carbs100" placeholder="Carbo / 100 g" min="0" max="100" inputmode="decimal" />
+        <input type="number" id="food-grams" placeholder="Grammi" min="0" max="2000" inputmode="decimal" />
+        <button type="button" class="btn-primary" onclick="aggiungiAlimento()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Aggiungi alimento
+        </button>
+      </div>
+      <datalist id="food-presets"></datalist>
+
+      <ul class="food-list" id="food-list"></ul>
+
+      <div class="carb-total">
+        <span class="lab">Carboidrati totali</span>
+        <span class="val" id="carb-total-val">0<span> g</span></span>
+      </div>
+
+      <button type="button" class="ghost-btn danger" id="clear-btn" onclick="svuotaLista()">Svuota lista</button>
+
+      <details class="manual">
+        <summary>Inserisci i carboidrati a mano</summary>
+        <div style="margin-top:12px;">
+          <div class="field-label">Carboidrati totali (g)</div>
+          <input type="number" id="carbs" placeholder="es. 60" min="0" max="500" inputmode="numeric" oninput="onCarbsManual()" />
+        </div>
+      </details>
+
+      <details class="manual" style="margin-top:8px;">
+        <summary>Gestisci preset salvati</summary>
+        <ul class="food-list" id="preset-list"></ul>
+      </details>
+    </div>
+
+    <div class="nav">
+      <button class="btn-back" onclick="goStep(1)">Indietro</button>
+      <button class="btn-primary" onclick="goStep(3)">
+        Calcola dose
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ====== STEP 3 : Dose ====== -->
+  <section class="panel" data-panel="3">
+    <div id="alert-box-3"></div>
+
+    <div class="dose-hero">
+      <div class="lab">Dose totale consigliata</div>
+      <div class="big"><span id="dose-totale">—</span><span>u</span></div>
+      <div class="sub">pasto + correzione glicemia</div>
+    </div>
+
+    <div class="breakdown">
+      <div class="b pasto">
+        <div class="lab">Dose pasto</div>
+        <div class="val" id="dose-pasto">—<small> u</small></div>
+      </div>
+      <div class="b">
+        <div class="lab">Correzione</div>
+        <div class="val" id="dose-correzione">—<small> u</small></div>
+      </div>
+    </div>
+
+    <div class="card recap" style="margin-top:14px;">
+      <div class="recap-row"><span class="k">Glicemia attuale</span><span class="v" id="recap-glic">—</span></div>
+      <div class="recap-row"><span class="k">Carboidrati pasto</span><span class="v" id="recap-carbs">—</span></div>
+      <div class="recap-row"><span class="k">In target (120–140)</span><span class="v" id="in-target">—</span></div>
+    </div>
+
+    <div class="nav">
+      <button class="btn-back" onclick="goStep(2)">Indietro</button>
+      <button class="btn-primary" onclick="fetchNS()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+        Aggiorna e ricalcola
+      </button>
+    </div>
+  </section>
+
+  <!-- Sincronizzazione (footer collassabile) -->
+  <details class="sync">
+    <summary>⚙︎ Sincronizzazione tra dispositivi</summary>
+    <div class="card" style="margin-top:8px;">
+      <div class="field-label">Codice di sincronizzazione</div>
+      <div class="food-form">
+        <input type="text" id="sync-code" placeholder="Codice (es. mario-2026)" style="grid-column:1 / -1;" autocomplete="off" />
+        <button type="button" class="btn-primary" onclick="connettiSync()">Sincronizza</button>
+      </div>
+      <div class="sync-status" id="sync-status">Non sincronizzato — i dati restano solo su questo dispositivo.</div>
+    </div>
+  </details>
+
+  <p class="note">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+    <span>Strumento di solo supporto. Consulta sempre il tuo diabetologo prima di modificare le dosi di insulina.</span>
+  </p>
+</div>
+
+<script>
+const NS_URL = 'https://cgm-remote-monitor-1-slow.onrender.com';
+const TARGET_MIN = 120;
+const TARGET_MAX = 140;
+const TARGET_MID = 130;
+const IC_RATIO = 10;   // rapporto insulina/carboidrati
+const CF = 40;         // fattore di correzione
+
+let currentGlicemia = null;
+
+const TREND_ARROWS = {
+  'DoubleUp': '⇈', 'SingleUp': '↑', 'FortyFiveUp': '↗',
+  'Flat': '→', 'FortyFiveDown': '↘', 'SingleDown': '↓',
+  'DoubleDown': '⇊', 'NONE': '—', 'NOT COMPUTABLE': '?'
+};
+
+const ICON_DANGER = '<svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>';
+const ICON_WARN = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>';
+const ICON_OK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>';
+
+// ---------- Stepper ----------
+let currentStep = 1;
+function goStep(n) {
+  currentStep = n;
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.toggle('active', +p.dataset.panel === n);
+  });
+  document.querySelectorAll('.step-pill').forEach(s => {
+    const sn = +s.dataset.step;
+    s.classList.toggle('active', sn === n);
+    s.classList.toggle('done', sn < n);
+  });
+  if (n === 3) calcola();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function bgState(g) {
+  if (g == null) return '';
+  if (g < 70 || g > 350) return 'state-danger';
+  if (g < 100) return 'state-warn';
+  if (g >= TARGET_MIN && g <= TARGET_MAX) return 'state-ok';
+  return '';
+}
+
+async function fetchNS() {
+  document.querySelectorAll('#refresh-btn').forEach(b => b.classList.add('spin'));
+  document.getElementById('status-text').textContent = 'Aggiornamento…';
+  try {
+    const res = await fetch(`${NS_URL}/api/v1/entries/sgv.json?count=2`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data || data.length === 0) throw new Error('Nessun dato');
+
+    const latest = data[0];
+    const prev = data[1];
+    currentGlicemia = latest.sgv;
+
+    const arrow = TREND_ARROWS[latest.direction] || '→';
+    document.getElementById('glicemia-display').textContent = latest.sgv;
+    document.getElementById('trend-display').textContent = arrow;
+    document.getElementById('chip-glic').textContent = latest.sgv;
+    document.getElementById('chip-trend').textContent = arrow;
+
+    // colora il chip in topbar
+    const chip = document.getElementById('bg-chip');
+    chip.className = 'bg-chip ' + bgState(latest.sgv);
+
+    const date = new Date(latest.date);
+    const timeStr = date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('time-display').textContent = timeStr;
+
+    const delta = prev ? latest.sgv - prev.sgv : 0;
+    document.getElementById('delta-display').textContent = (delta >= 0 ? '+' : '') + delta;
+
+    const g = latest.sgv;
+    let alertHtml = '';
+    if (g < 70) {
+      alertHtml = `<div class="alert alert-danger">${ICON_DANGER}<span>Ipoglicemia grave — non fare insulina, assumi zuccheri subito.</span></div>`;
+    } else if (g < 100) {
+      alertHtml = `<div class="alert alert-warn">${ICON_WARN}<span>Glicemia bassa — valuta con il medico prima di correggere.</span></div>`;
+    } else if (g > 350) {
+      alertHtml = `<div class="alert alert-danger">${ICON_DANGER}<span>Glicemia molto alta — contatta il medico.</span></div>`;
+    } else if (g >= TARGET_MIN && g <= TARGET_MAX) {
+      alertHtml = `<div class="alert alert-ok">${ICON_OK}<span>Glicemia nel tuo target. Nessuna correzione necessaria.</span></div>`;
+    }
+    document.getElementById('alert-box').innerHTML = alertHtml;
+    document.getElementById('alert-box-3').innerHTML = alertHtml;
+
+    document.getElementById('status-text').textContent = `Aggiornato alle ${timeStr}`;
+    calcola();
+  } catch (e) {
+    document.getElementById('status-text').textContent = `Errore: ${e.message}`;
+    document.getElementById('glicemia-display').textContent = '—';
+    document.getElementById('chip-glic').textContent = '—';
+  } finally {
+    document.querySelectorAll('#refresh-btn').forEach(b => b.classList.remove('spin'));
+  }
+}
+
+// ---- Gestione alimenti ----
+const FOOD_PRESETS = {
+  'Pane':            50,
+  'Pasta (cruda)':   75,
+  'Pasta (cotta)':   25,
+  'Riso (cotto)':    28,
+  'Patate':          17,
+  'Pizza':           30,
+  'Mela':            14,
+  'Banana':          23,
+  'Latte':            5,
+  'Yogurt':           7,
+  'Biscotti':        65,
+  'Cornetto':        45,
+};
+
+const LS_ALIMENTI = 'calc_insulina_alimenti';
+const LS_PRESETS = 'calc_insulina_presets';
+const LS_SYNC_CODE = 'calc_insulina_sync_code';
+
+// ---- Configurazione backend REST (MongoDB Atlas) ----
+const API_BASE = 'https://TUO-BACKEND.example.com/api';
+
+let alimenti = [];
+let customPresets = {};
+let syncCode = null;
+let syncing = false;
+
+function loadStorage() {
+  try {
+    const a = localStorage.getItem(LS_ALIMENTI);
+    if (a) alimenti = JSON.parse(a);
+  } catch (e) { alimenti = []; }
+  try {
+    const p = localStorage.getItem(LS_PRESETS);
+    if (p) customPresets = JSON.parse(p);
+  } catch (e) { customPresets = {}; }
+}
+
+function saveAlimenti() {
+  try { localStorage.setItem(LS_ALIMENTI, JSON.stringify(alimenti)); } catch (e) {}
+  pushSync();
+}
+
+function savePresets() {
+  try { localStorage.setItem(LS_PRESETS, JSON.stringify(customPresets)); } catch (e) {}
+  pushSync();
+}
+
+function allPresets() {
+  return { ...FOOD_PRESETS, ...customPresets };
+}
+
+// ---- Sincronizzazione cloud ----
+function setSyncStatus(msg, cls) {
+  const el = document.getElementById('sync-status');
+  el.textContent = msg;
+  el.className = 'sync-status' + (cls ? ' ' + cls : '');
+}
+
+function syncConfigurato() {
+  return !API_BASE.includes('TUO-BACKEND');
+}
+
+function initSync() {
+  if (!syncConfigurato()) {
+    setSyncStatus('Sync non configurato — i dati restano solo su questo dispositivo.');
+    return;
+  }
+  const saved = localStorage.getItem(LS_SYNC_CODE);
+  if (saved) {
+    document.getElementById('sync-code').value = saved;
+    connettiSync();
+  }
+}
+
+async function connettiSync() {
+  const code = document.getElementById('sync-code').value.trim().toLowerCase();
+  if (!code) { setSyncStatus('Inserisci un codice di sincronizzazione.', 'err'); return; }
+  if (!syncConfigurato()) { setSyncStatus('Sync non configurato in questo file.', 'err'); return; }
+  syncCode = code;
+  localStorage.setItem(LS_SYNC_CODE, code);
+  setSyncStatus('Connessione in corso…');
+  try {
+    const res = await fetch(`${API_BASE}/dati?codice=${encodeURIComponent(code)}`);
+    syncing = true;
+    if (res.status === 404) {
+      await pushSync();
+    } else if (res.ok) {
+      const data = await res.json();
+      alimenti = Array.isArray(data.alimenti) ? data.alimenti : [];
+      customPresets = (data.presets && typeof data.presets === 'object') ? data.presets : {};
+      saveAlimenti(); savePresets();
+      refreshPresetList(); renderAlimenti();
+    } else {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    syncing = false;
+    setSyncStatus(`Sincronizzato come "${code}" ✓`, 'ok');
+  } catch (e) {
+    syncing = false;
+    setSyncStatus('Errore di sincronizzazione: ' + (e.message || e), 'err');
+  }
+}
+
+async function pushSync() {
+  if (!syncConfigurato() || !syncCode || syncing) return;
+  try {
+    const res = await fetch(`${API_BASE}/dati`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codice: syncCode,
+        alimenti: alimenti,
+        presets: customPresets,
+        updated_at: new Date().toISOString()
+      })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (e) {
+    setSyncStatus('Salvataggio cloud fallito: ' + (e.message || e), 'err');
+  }
+}
+
+function initPresets() {
+  const presets = allPresets();
+  const dl = document.getElementById('food-presets');
+  document.getElementById('food-name').setAttribute('list', 'food-presets');
+  dl.innerHTML = Object.keys(presets).map(n => `<option value="${n}">`).join('');
+  document.getElementById('food-name').addEventListener('input', (e) => {
+    const v = allPresets()[e.target.value];
+    if (v != null) document.getElementById('food-carbs100').value = v;
+  });
+}
+
+function refreshPresetList() {
+  const presets = allPresets();
+  document.getElementById('food-presets').innerHTML =
+    Object.keys(presets).map(n => `<option value="${n}">`).join('');
+}
+
+function aggiungiAlimento() {
+  const name = document.getElementById('food-name').value.trim() || 'Alimento';
+  const carbs100 = parseFloat(document.getElementById('food-carbs100').value);
+  const grams = parseFloat(document.getElementById('food-grams').value);
+  if (isNaN(carbs100) || isNaN(grams) || grams <= 0) {
+    document.getElementById('food-grams').focus();
+    return;
+  }
+  const carbs = (carbs100 * grams) / 100;
+  alimenti.push({ name, carbs100, grams, carbs });
+  if (FOOD_PRESETS[name] == null) {
+    customPresets[name] = carbs100;
+    savePresets();
+    refreshPresetList();
+  }
+  document.getElementById('food-name').value = '';
+  document.getElementById('food-carbs100').value = '';
+  document.getElementById('food-grams').value = '';
+  document.getElementById('food-name').focus();
+  renderAlimenti();
+}
+
+function rimuoviAlimento(i) {
+  alimenti.splice(i, 1);
+  renderAlimenti();
+}
+
+function modificaAlimento(i) {
+  const a = alimenti[i];
+  if (!a) return;
+  const input = prompt(`Grammi di "${a.name}":`, a.grams);
+  if (input === null) return;
+  const grams = parseFloat(input.replace(',', '.'));
+  if (isNaN(grams) || grams <= 0 || grams > 2000) {
+    alert('Inserisci una grammatura valida (1–2000 g).');
+    return;
+  }
+  a.grams = grams;
+  a.carbs = (a.carbs100 * grams) / 100;
+  renderAlimenti();
+}
+
+function svuotaLista() {
+  if (alimenti.length === 0) return;
+  if (!confirm('Svuotare tutta la lista alimenti?')) return;
+  alimenti = [];
+  renderAlimenti();
+}
+
+// ---- Gestione preset salvati ----
+function renderPresetManager() {
+  const ul = document.getElementById('preset-list');
+  const names = Object.keys(customPresets);
+  if (names.length === 0) {
+    ul.innerHTML = '<li class="food-empty">Nessun preset personalizzato salvato</li>';
+    return;
+  }
+  ul.innerHTML = names.map(n => {
+    const safe = n.replace(/'/g, "\\'");
+    return `
+    <li>
+      <span class="f-name">${n}</span>
+      <span class="f-carbs">${customPresets[n]} g/100</span>
+      <button class="f-edit" onclick="modificaPreset('${safe}')" aria-label="Modifica preset">✎</button>
+      <button class="f-del" onclick="eliminaPreset('${safe}')" aria-label="Elimina preset">×</button>
+    </li>`;
+  }).join('');
+}
+
+function modificaPreset(name) {
+  const attuale = customPresets[name];
+  const input = prompt(`Carboidrati per 100 g di "${name}":`, attuale);
+  if (input === null) return;
+  const v = parseFloat(input.replace(',', '.'));
+  if (isNaN(v) || v < 0 || v > 100) {
+    alert('Inserisci un valore valido tra 0 e 100.');
+    return;
+  }
+  customPresets[name] = v;
+  savePresets();
+  refreshPresetList();
+  renderPresetManager();
+}
+
+function eliminaPreset(name) {
+  delete customPresets[name];
+  savePresets();
+  refreshPresetList();
+  renderPresetManager();
+}
+
+function renderAlimenti() {
+  const ul = document.getElementById('food-list');
+  if (alimenti.length === 0) {
+    ul.innerHTML = '<li class="food-empty">Nessun alimento aggiunto</li>';
+  } else {
+    ul.innerHTML = alimenti.map((a, i) => `
+      <li>
+        <span class="f-name">${a.name}</span>
+        <span class="f-detail">${a.grams} g · ${a.carbs100} g/100</span>
+        <span class="f-carbs">${a.carbs.toFixed(0)} g</span>
+        <button class="f-edit" onclick="modificaAlimento(${i})" aria-label="Modifica grammi">✎</button>
+        <button class="f-del" onclick="rimuoviAlimento(${i})" aria-label="Rimuovi">×</button>
+      </li>`).join('');
+  }
+  document.getElementById('clear-btn').style.display = alimenti.length ? 'block' : 'none';
+  const tot = alimenti.reduce((s, a) => s + a.carbs, 0);
+  document.getElementById('carbs').value = tot > 0 ? Math.round(tot) : '';
+  document.getElementById('carb-total-val').innerHTML = `${tot > 0 ? Math.round(tot) : 0}<span> g</span>`;
+  saveAlimenti();
+  calcola();
+}
+
+function onCarbsManual() {
+  alimenti = [];
+  saveAlimenti();
+  document.getElementById('food-list').innerHTML = '<li class="food-empty">Nessun alimento aggiunto</li>';
+  document.getElementById('clear-btn').style.display = 'none';
+  const v = parseFloat(document.getElementById('carbs').value);
+  document.getElementById('carb-total-val').innerHTML = `${isNaN(v) ? 0 : v}<span> g</span>`;
+  calcola();
+}
+
+function calcola() {
+  const carbs = parseFloat(document.getElementById('carbs').value);
+
+  document.getElementById('recap-carbs').textContent = isNaN(carbs) ? '—' : carbs + ' g';
+  document.getElementById('recap-glic').textContent = currentGlicemia === null ? '—' : currentGlicemia + ' mg/dl';
+
+  if (currentGlicemia === null) {
+    document.getElementById('dose-pasto').innerHTML = '—<small> u</small>';
+    document.getElementById('dose-correzione').innerHTML = '—<small> u</small>';
+    document.getElementById('dose-totale').textContent = '—';
+    document.getElementById('in-target').textContent = '—';
+    return;
+  }
+  const g = currentGlicemia;
+  const dosePasto = isNaN(carbs) ? 0 : Math.round(carbs / IC_RATIO);
+  const correzione = Math.round((g - TARGET_MID) / CF);
+  const totale = dosePasto + correzione;
+
+  document.getElementById('dose-pasto').innerHTML = (isNaN(carbs) ? '—' : dosePasto) + '<small> u</small>';
+  document.getElementById('dose-correzione').innerHTML = (correzione >= 0 ? '+' : '') + correzione + '<small> u</small>';
+  document.getElementById('in-target').textContent =
+    (g >= TARGET_MIN && g <= TARGET_MAX) ? 'Sì ✓' : (g < TARGET_MIN ? 'Bassa' : 'Alta');
+  document.getElementById('dose-totale').textContent = totale <= 0 ? '0' : totale;
+}
+
+// Render preset manager quando si apre il details
+document.querySelectorAll('details.manual').forEach(d => {
+  d.addEventListener('toggle', () => { if (d.open) renderPresetManager(); });
+});
+
+loadStorage();
+initPresets();
+renderAlimenti();
+initSync();
+fetchNS();
+setInterval(fetchNS, 5 * 60 * 1000);
+</script>
+</body>
+</html>
